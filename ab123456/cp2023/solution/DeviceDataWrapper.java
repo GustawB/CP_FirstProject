@@ -23,5 +23,12 @@ public class DeviceDataWrapper {
         nrOfComponentsLeavingDevice = 0;
     }
 
+    public boolean isComponentInDevice(ComponentId componentId){
+        return (componentsInsideDevice.contains(componentId) ||
+                componentsLeavingDevice.contains(componentId));
+    }
 
+    public int getNrOfFreeMemorySlots(){
+        return nrOfFreeMemorySlots;
+    }
 }

@@ -10,13 +10,10 @@ import java.util.*;
 import java.util.concurrent.Semaphore;
 
 public class StorageSystemClass implements StorageSystem {
-    private Map<DeviceId, Integer> deviceTotalSlots;
-    private  Map<ComponentId, DeviceId> componentPlacement;
-    private Map<DeviceId, Integer> nrOfComponentsInDevice;
-
+    //Map containing data structure with data for every device.
+    Map<DeviceId, DeviceDataWrapper> deviceData;
     //Map used to keep track of the ongoing transfers on each component.
     private Map<ComponentId, Boolean> componentsStates;
-    private Map<DeviceId, List<Integer>> componentsLeavingDevice;
     private Semaphore transferMUTEX = new Semaphore(1, true);
 
     public StorageSystemClass(Map<DeviceId, Integer> deviceTotalSlots,
@@ -24,7 +21,7 @@ public class StorageSystemClass implements StorageSystem {
         //Check whether there is a component assigned to the device without
         //defined size, or if there are too many components assigned
         //to one device.
-        nrOfComponentsInDevice = new HashMap<>();
+        Map<DeviceId, ArrayList<ComponentId>> componentsInDevice = new HashMap<>();
         for (Map.Entry<ComponentId, DeviceId> me :
                 componentPlacement.entrySet()) {
             if (!deviceTotalSlots.containsKey(me.getValue())) {
@@ -32,10 +29,11 @@ public class StorageSystemClass implements StorageSystem {
                         "Component assigned to the device " +
                                 "without specified size.");
             }
-            nrOfComponentsInDevice.computeIfAbsent(me.getValue(), x -> 0);
-            nrOfComponentsInDevice.put(me.getValue(),
-                    nrOfComponentsInDevice.get(me.getValue()) + 1);
-            if (nrOfComponentsInDevice.get(me.getValue()) >
+            if(!componentPlacement.containsKey(me.getValue())){
+                componentsInDevice.put(me.getValue(), new ArrayList<ComponentId>());
+            }
+            componentsInDevice.get(me.getValue()).add(me.getKey());
+            if (componentsInDevice.get(me.getValue()).size() >
                     deviceTotalSlots.get(me.getValue())) {
                 throw new IllegalArgumentException(
                         "Too many components assigned to the device" +
@@ -43,11 +41,20 @@ public class StorageSystemClass implements StorageSystem {
             }
         }
         //Passed parameters were valid, we can initialize our object.
-        this.deviceTotalSlots = deviceTotalSlots;
-        this.componentPlacement = componentPlacement;
+        deviceData = new HashMap<>();
+        for(Map.Entry<DeviceId, Integer> entry : deviceTotalSlots.entrySet()){
+            if(componentsInDevice.containsKey(entry.getKey())){
+                deviceData.put(entry.getKey(), new DeviceDataWrapper(
+                        componentsInDevice.get(entry.getKey()), entry.getValue()));
+            }
+            else{
+                deviceData.put(entry.getKey(), new DeviceDataWrapper(
+                        new ArrayList<>(), entry.getValue()));
+            }
+        }
         //initialize mutexex for each component;
         componentsStates = new HashMap<>();
-        for(Map.Entry<ComponentId, DeviceId> entry : this.componentPlacement.entrySet()){
+        for(Map.Entry<ComponentId, DeviceId> entry : componentPlacement.entrySet()){
             componentsStates.put(entry.getKey(), false);
         }
         //Initialize map containing info about
@@ -62,23 +69,22 @@ public class StorageSystemClass implements StorageSystem {
             transferMUTEX.release();
             throw new ComponentIsBeingOperatedOn(transfer.getComponentId());
         }
-        else if(!deviceTotalSlots.containsKey(transfer.getSourceDeviceId())){
+        else if(!deviceData.containsKey(transfer.getSourceDeviceId())){
             transferMUTEX.release();
             throw new DeviceDoesNotExist(transfer.getSourceDeviceId());
         }
-        else if(!deviceTotalSlots.containsKey(transfer.getDestinationDeviceId())){
+        else if(!deviceData.containsKey(transfer.getDestinationDeviceId())){
             transferMUTEX.release();
             throw new DeviceDoesNotExist(transfer.getDestinationDeviceId());
         }
-        else if(!componentPlacement.containsKey(transfer.getComponentId()) ||
-                componentPlacement.get(transfer.getComponentId()) !=
-                        transfer.getSourceDeviceId()){
+        else if(!deviceData.get(transfer.getSourceDeviceId())
+                .isComponentInDevice(transfer.getComponentId())){
             transferMUTEX.release();
             throw new ComponentDoesNotExist(transfer.getComponentId(),
                     transfer.getSourceDeviceId());
         }
-        else if(componentPlacement.get(transfer.getComponentId())
-                .equals(transfer.getDestinationDeviceId())){
+        else if(deviceData.get(transfer.getDestinationDeviceId())
+                .isComponentInDevice(transfer.getComponentId())){
             transferMUTEX.release();
             throw new ComponentDoesNotNeedTransfer(transfer.getComponentId(),
                     transfer.getSourceDeviceId());
@@ -89,9 +95,10 @@ public class StorageSystemClass implements StorageSystem {
     //the device A to the device B. It inherits the critical section
     //from the execute() method.
     private void performFromToOperation(ComponentTransfer transfer){
-        int nrOfFreeMemorySlots = deviceTotalSlots.get(transfer.getSourceDeviceId()) -
-                nrOfComponentsInDevice.get(transfer.getSourceDeviceId());
-        if(nrOfFreeMemorySlots > 0){
+        ComponentId comp = transfer.getComponentId();
+        DeviceId src = transfer.getSourceDeviceId();
+        DeviceId dest = transfer.getDestinationDeviceId();
+        if(deviceData.get(dest).getNrOfFreeMemorySlots() > 0){
 
         }
     }
