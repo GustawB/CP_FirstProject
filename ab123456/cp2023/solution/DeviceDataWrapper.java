@@ -1,6 +1,7 @@
 package cp2023.solution;
 
 import cp2023.base.ComponentId;
+import cp2023.base.ComponentTransfer;
 
 import java.sql.Array;
 import java.util.ArrayList;
@@ -13,8 +14,9 @@ public class DeviceDataWrapper {
     private int nrOfFreeMemorySlots;
     private int nrOfComponentsLeavingDevice;
     private int deviceSize;
-    private List<ComponentId> componentsInsideDevice;
-    private List<ComponentId> componentsLeavingDevice;
+    private ArrayList<ComponentId> componentsInsideDevice;
+    private ArrayList<ComponentId> componentsLeavingDevice;
+    private ArrayList<ComponentTransfer> transfersWaitingForMemory;
     private Semaphore freeMemorySpace;
     private Semaphore freeMemorySpaceInFuture;
 
@@ -23,6 +25,7 @@ public class DeviceDataWrapper {
         componentsInsideDevice = components;
         nrOfFreeMemorySlots = deviceSize - components.size();
         componentsLeavingDevice = new ArrayList<>();
+        transfersWaitingForMemory = new ArrayList<>();
         nrOfComponentsLeavingDevice = 0;
         freeMemorySpace = new Semaphore(nrOfFreeMemorySlots, true);
         freeMemorySpaceInFuture = new Semaphore(0, true);
@@ -54,6 +57,18 @@ public class DeviceDataWrapper {
 
     public int getNrOfComponentsLeavingDevice(){
         return nrOfComponentsLeavingDevice;
+    }
+
+    public ArrayList<ComponentTransfer> getTransfersWaitingForMemory(){
+        return transfersWaitingForMemory;
+    }
+
+    public void addTransferWaitingForMemory(ComponentTransfer transfer){
+        transfersWaitingForMemory.add(transfer);
+    }
+
+    public void removeTransferFromWaitingForMemory(ComponentTransfer transfer){
+        transfersWaitingForMemory.remove(transfer);
     }
 
     public void addComponentLeavingDevice(ComponentId comp){

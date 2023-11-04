@@ -169,6 +169,24 @@ public class StorageSystemClass implements StorageSystem {
         setCompStateToFalse(transfer.getComponentId());
     }
 
+    private boolean bfsOnTransfers (DeviceId id){
+        Queue<DeviceId> deviceQueue = new ArrayDeque<>();
+        for(ComponentTransfer t : deviceData.get(id).getTransfersWaitingForMemory()){
+            deviceQueue.add(t.getDestinationDeviceId());
+        }
+        while(!deviceQueue.isEmpty()){
+            DeviceId popped = deviceQueue.poll();
+            for(ComponentTransfer t : deviceData.get(popped).getTransfersWaitingForMemory()){
+                if(t.getDestinationDeviceId().equals(id)){return true;}
+                else{
+                    deviceQueue.add(t.getDestinationDeviceId());
+                }
+            }
+        }
+
+        return false;
+    }
+
     //Function  that performs the operation of moving a component from
     //the device A to the device B. It inherits the critical section
     //from the execute() method.
@@ -251,6 +269,10 @@ public class StorageSystemClass implements StorageSystem {
         ComponentId comp = transfer.getComponentId();
         DeviceId src = transfer.getSourceDeviceId();
         DeviceId dest = transfer.getDestinationDeviceId();
+        //Remove transfer from the list of the tranfers waiting for the
+        //memory if it is in it. If it was, it probably means that we closed
+        //a cycle.
+        deviceData.get(src).removeTransferFromWaitingForMemory(transfer);
         //Release mutex, so other processes can perform their executes
         // in a concurrent manner.
         transferMUTEX.release();
@@ -283,11 +305,18 @@ public class StorageSystemClass implements StorageSystem {
                 addComponentWithFreeMemoryInFuture(transfer);
             }
             else{//No component is leaving the dest device.
-                transferMUTEX.release();
-                deviceData.get(transfer.getDestinationDeviceId())
-                        .acquireFreeMemoryInFuture();
-                acquireTransferMutex();
-                addComponentWithFreeMemoryInFuture(transfer);
+                deviceData.get(transfer.getSourceDeviceId())
+                                .addTransferWaitingForMemory(transfer);
+                if(bfsOnTransfers(transfer.getSourceDeviceId())){
+                    addComponentWithFreeMemoryInFuture(transfer);
+                }
+                else{
+                    transferMUTEX.release();
+                    deviceData.get(transfer.getDestinationDeviceId())
+                            .acquireFreeMemoryInFuture();
+                    acquireTransferMutex();
+                    addComponentWithFreeMemoryInFuture(transfer);
+                }
             }
         }
     }
