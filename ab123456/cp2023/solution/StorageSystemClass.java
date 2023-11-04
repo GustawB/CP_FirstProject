@@ -60,30 +60,50 @@ public class StorageSystemClass implements StorageSystem {
         //Initialize map containing info about
     }
 
+    private void acquireTransferMutex(){
+        try {
+            transferMUTEX.acquire();
+        } catch (InterruptedException e) {
+            throw new RuntimeException("panic: unexpected thread interruption");
+        }
+    }
+
+    private void setCompStateToFalse(ComponentId id){
+        acquireTransferMutex();
+        componentsStates.put(id, false);
+        transferMUTEX.release();
+    }
+
     //Validates transfer, and if there's anythong wrong, this functionn
     //released transferMutex and throws a corresponding exception.
     private void validateTransfer(ComponentTransfer transfer) throws TransferException {
         if(componentsStates.containsKey(transfer.getComponentId()) &&
-                componentsStates.get(transfer.getComponentId()) == true){
+                componentsStates.get(transfer.getComponentId())){
             //There's already an ongoing transfer on the given component.
             transferMUTEX.release();
             throw new ComponentIsBeingOperatedOn(transfer.getComponentId());
         }
-        else if(!deviceData.containsKey(transfer.getSourceDeviceId())){
+        else if(transfer.getSourceDeviceId() != null &&
+                !deviceData.containsKey(transfer.getSourceDeviceId())){
+            //Source device does not exist.
             transferMUTEX.release();
             throw new DeviceDoesNotExist(transfer.getSourceDeviceId());
         }
-        else if(!deviceData.containsKey(transfer.getDestinationDeviceId())){
+        else if(transfer.getDestinationDeviceId() != null &&
+                !deviceData.containsKey(transfer.getDestinationDeviceId())){
+            //Destination device does not exist.
             transferMUTEX.release();
             throw new DeviceDoesNotExist(transfer.getDestinationDeviceId());
         }
-        else if(!deviceData.get(transfer.getSourceDeviceId())
+        else if(transfer.getSourceDeviceId() != null &&
+                !deviceData.get(transfer.getSourceDeviceId())
                 .isComponentInDevice(transfer.getComponentId())){
             transferMUTEX.release();
             throw new ComponentDoesNotExist(transfer.getComponentId(),
                     transfer.getSourceDeviceId());
         }
-        else if(deviceData.get(transfer.getDestinationDeviceId())
+        else if(transfer.getDestinationDeviceId() != null &&
+                deviceData.get(transfer.getDestinationDeviceId())
                 .isComponentInDevice(transfer.getComponentId())){
             transferMUTEX.release();
             throw new ComponentDoesNotNeedTransfer(transfer.getComponentId(),
@@ -91,39 +111,156 @@ public class StorageSystemClass implements StorageSystem {
         }
     }
 
-    //Function  that performs the operation of moving a component from
-    //the device A to the device B. It inherits the critical section
-    //from the execute() method.
-    private void performFromToOperation(ComponentTransfer transfer){
+    private void moveComponentWithFreeMemorySpace(ComponentTransfer transfer){
         ComponentId comp = transfer.getComponentId();
         DeviceId src = transfer.getSourceDeviceId();
         DeviceId dest = transfer.getDestinationDeviceId();
-        if(deviceData.get(dest).getNrOfFreeMemorySlots() > 0){
-
-        }
+        //Add component to the list of components
+        //leaving the source device.
+        deviceData.get(src).addComponentLeavingDevice(comp);
+        //Update the number of free memory slots in the dest device.
+        deviceData.get(dest).decrementFreeSpace();
+        //Release mutex, so other processes can perform their executes
+        // in a concurrent manner.
+        transferMUTEX.release();
+        transfer.prepare();
+        //We finished the preparation phrase, now we need to enter
+        //the critical section again, so we can perform necessary
+        //transition of the component.
+        acquireTransferMutex();
+        //Time to remove the component from the source device.
+        deviceData.get(src).leaveDevice(comp);
+        //And add it to the dest device.
+        deviceData.get(dest).enterDevice(comp);
+        deviceData.get(dest).acquireFreeMemory();
+        //Finally, release mutex and perform the "perform" action.
+        transferMUTEX.release();
+        transfer.perform();
+        //End of transfer. Time to notify everyone that the component is being
+        //operated on no more.
+        setCompStateToFalse(transfer.getComponentId());
     }
 
-    @Override
-    public void execute(ComponentTransfer transfer) throws TransferException {
-        //1.Entering critical section, acquire mutex.
+    private void moveComponentWithFreeMemoryInTheFuture(ComponentTransfer transfer){
+        ComponentId comp = transfer.getComponentId();
+        DeviceId src = transfer.getSourceDeviceId();
+        DeviceId dest = transfer.getDestinationDeviceId();
+        //Add component to the list of components
+        //leaving the source device.
+        deviceData.get(src).addComponentLeavingDevice(comp);
+        //Release mutex, so other processes can perform their executes
+        // in a concurrent manner.
+        transferMUTEX.release();
+        transfer.prepare();
+        //Now we want to wait for the free memory slot until it is available.
+        deviceData.get(dest).acquireFreeMemory();
+        //Here we should have received an access to the freshly
+        // freed memory slot.
+        acquireTransferMutex();
+        //We finished the preparation phrase, now we need to enter
+        //the critical section again, so we can perform necessary
+        //transition of the component.
         try {
             transferMUTEX.acquire();
         } catch (InterruptedException e) {
             throw new RuntimeException("panic: unexpected thread interruption");
         }
+        //Time to remove the component from the source device.
+        deviceData.get(src).leaveDevice(comp);
+        //And add it to the dest device.
+        deviceData.get(dest).enterDevice(comp);
+        //Finally, release mutex and perform the "perform" action.
+        transferMUTEX.release();
+        transfer.perform();
+        //End of transfer. Time to inform everyone about that.
+        setCompStateToFalse(transfer.getComponentId());
+    }
+
+    //Function  that performs the operation of moving a component from
+    //the device A to the device B. It inherits the critical section
+    //from the execute() method.
+    private void moveComponentOperation(ComponentTransfer transfer){
+        if(deviceData.get(transfer.getDestinationDeviceId())
+                .getNrOfFreeMemorySlots() > 0){
+            moveComponentWithFreeMemorySpace(transfer);
+        }
+        else {//freeMemorySlots == 0
+            if(deviceData.get(transfer.getDestinationDeviceId())
+                    .getNrOfComponentsLeavingDevice() > 0){
+                moveComponentWithFreeMemoryInTheFuture(transfer);
+            }
+            else{//No component is leaving the dest device.
+                transferMUTEX.release();
+                deviceData.get(transfer.getDestinationDeviceId())
+                        .acquireFreeMemoryInFuture();
+                acquireTransferMutex();
+                moveComponentWithFreeMemoryInTheFuture(transfer);
+            }
+        }
+    }
+
+    //Function  that performs the operation of deleting a component
+    // from the source device. It inherits the critical section
+    //from the execute() method.
+    private void deleteComponentOperation(ComponentTransfer transfer){
+        ComponentId comp = transfer.getComponentId();
+        DeviceId src = transfer.getSourceDeviceId();
+        DeviceId dest = transfer.getDestinationDeviceId();
+        //Add component to the list of components
+        //leaving the source device.
+        deviceData.get(src).addComponentLeavingDevice(comp);
+        //Now the first part of the deletion will begin, so before that, we
+        //will release the transfer mutex.
+        transferMUTEX.release();
+        transfer.prepare();
+        //It's time to inform everyone, that a memory slot has become
+        //available, and the first thing we need to do is to get into the
+        //critical section...
+        acquireTransferMutex();
+        //...and then update all the necessary data.
+        deviceData.get(src).leaveDevice(comp);
+        //Finally, release mutex and perform the "perform" action.
+        transferMUTEX.release();
+        transfer.perform();
+        //End of transfer. Time to delete the remaining data about the
+        //deleted component from the system.
+        acquireTransferMutex();
+        componentsStates.remove(transfer.getComponentId());
+        transferMUTEX.release();
+    }
+
+    @Override
+    public void execute(ComponentTransfer transfer) throws TransferException {
+        //1.Entering critical section, acquire mutex.
+        acquireTransferMutex();
         //2. Validate transfer. If something,s wrong, we RELEASE MUTEX FIRST,
         //and then throw an exception.
         validateTransfer(transfer);
         //3. Everything was fine until now, so it's time to determine what
         //type of operation we are performing.
-        if(transfer.getSourceDeviceId()  != null && transfer.getDestinationDeviceId() != null){
-            //We are transfering component from one device to another.
+        if(transfer.getSourceDeviceId() != null && transfer.getDestinationDeviceId() != null){
+            //We are transferring a component from one device to another.
 
             //A) It's time to inform everyone that we started the transfer process
             //on the given component.
             componentsStates.put(transfer.getComponentId(), true);
+            //B) Let's start the transfer operation.
+            moveComponentOperation(transfer);
+            //The end, mutex will be released inside the moveComponentOperation() helper functions.
+        }
+        else if(transfer.getSourceDeviceId() != null && transfer.getDestinationDeviceId() == null){
+            //We are deleting a component from the source component.
 
-            //B)
+            //A) Inform everyone that we are starting a process.
+            componentsStates.put(transfer.getComponentId(), true);
+            //B) Let's start the deletion operation.
+            deleteComponentOperation(transfer);
+            //The end, mutex will be released inside the deleteComponentOperation() function.
+        }
+        else if(transfer.getSourceDeviceId() == null && transfer.getDestinationDeviceId() != null){
+            //We are adding a new component to the destination device.
+
+
         }
     }
 }
