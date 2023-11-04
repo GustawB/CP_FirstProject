@@ -154,17 +154,10 @@ public class StorageSystemClass implements StorageSystem {
         transfer.prepare();
         //Now we want to wait for the free memory slot until it is available.
         deviceData.get(dest).acquireFreeMemory();
-        //Here we should have received an access to the freshly
-        // freed memory slot.
-        acquireTransferMutex();
         //We finished the preparation phrase, now we need to enter
         //the critical section again, so we can perform necessary
         //transition of the component.
-        try {
-            transferMUTEX.acquire();
-        } catch (InterruptedException e) {
-            throw new RuntimeException("panic: unexpected thread interruption");
-        }
+        acquireTransferMutex();
         //Time to remove the component from the source device.
         deviceData.get(src).leaveDevice(comp);
         //And add it to the dest device.
@@ -229,6 +222,76 @@ public class StorageSystemClass implements StorageSystem {
         transferMUTEX.release();
     }
 
+    private void addComponentWithFreeMemory(ComponentTransfer transfer){
+        ComponentId comp = transfer.getComponentId();
+        DeviceId src = transfer.getSourceDeviceId();
+        DeviceId dest = transfer.getDestinationDeviceId();
+        //Update the number of free memory slots in the dest device.
+        deviceData.get(dest).decrementFreeSpace();
+        //Release mutex, so other processes can perform their executes
+        // in a concurrent manner.
+        transferMUTEX.release();
+        transfer.prepare();
+        //We finished the preparation phrase, now we need to enter
+        //the critical section again, so we can perform necessary
+        //addition of the component.
+        acquireTransferMutex();
+        //Time to add the comp to the dest device.
+        deviceData.get(dest).enterDevice(comp);
+        deviceData.get(dest).acquireFreeMemory();
+        //Finally, release mutex and perform the "perform" action.
+        transferMUTEX.release();
+        transfer.perform();
+        //End of transfer. Time to notify everyone that the component is being
+        //operated on no more.
+        setCompStateToFalse(transfer.getComponentId());
+    }
+
+    private void addComponentWithFreeMemoryInFuture(ComponentTransfer transfer){
+        ComponentId comp = transfer.getComponentId();
+        DeviceId src = transfer.getSourceDeviceId();
+        DeviceId dest = transfer.getDestinationDeviceId();
+        //Release mutex, so other processes can perform their executes
+        // in a concurrent manner.
+        transferMUTEX.release();
+        transfer.prepare();
+        //Now we want to wait for the free memory slot until it is available.
+        deviceData.get(dest).acquireFreeMemory();
+        //Here we should have received an access to the freshly
+        // freed memory slot.
+        acquireTransferMutex();
+        //Add the new component to the dest device.
+        deviceData.get(dest).enterDevice(comp);
+        //Finally, release mutex and perform the "perform" action.
+        transferMUTEX.release();
+        transfer.perform();
+        //End of transfer. Time to inform everyone about that.
+        setCompStateToFalse(transfer.getComponentId());
+    }
+
+    //Function  that performs the operation of adding a component
+    // to the destination device. It inherits the critical section
+    //from the execute() method.
+    private void addComponentOperation(ComponentTransfer transfer){
+        if(deviceData.get(transfer.getDestinationDeviceId())
+                .getNrOfFreeMemorySlots() > 0){
+            addComponentWithFreeMemory(transfer);
+        }
+        else {//freeMemorySlots == 0
+            if(deviceData.get(transfer.getDestinationDeviceId())
+                    .getNrOfComponentsLeavingDevice() > 0){
+                addComponentWithFreeMemoryInFuture(transfer);
+            }
+            else{//No component is leaving the dest device.
+                transferMUTEX.release();
+                deviceData.get(transfer.getDestinationDeviceId())
+                        .acquireFreeMemoryInFuture();
+                acquireTransferMutex();
+                addComponentWithFreeMemoryInFuture(transfer);
+            }
+        }
+    }
+
     @Override
     public void execute(ComponentTransfer transfer) throws TransferException {
         //1.Entering critical section, acquire mutex.
@@ -260,7 +323,10 @@ public class StorageSystemClass implements StorageSystem {
         else if(transfer.getSourceDeviceId() == null && transfer.getDestinationDeviceId() != null){
             //We are adding a new component to the destination device.
 
-
+            //A) Inform everyone that we are starting a process.
+            componentsStates.put(transfer.getComponentId(), true);
+            //B) Let's start the adding operation.
+            addComponentOperation(transfer);
         }
     }
 }
