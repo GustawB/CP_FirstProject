@@ -128,8 +128,6 @@ public class StorageSystemClass implements StorageSystem {
         //the critical section again, so we can perform necessary
         //transition of the component.
         acquireTransferMutex();
-        //Time to remove the component from the source device.
-        deviceData.get(src).leaveDevice(comp);
         //And add it to the dest device.
         deviceData.get(dest).enterDevice(comp);
         deviceData.get(dest).acquireFreeMemory();
@@ -138,7 +136,14 @@ public class StorageSystemClass implements StorageSystem {
         transfer.perform();
         //End of transfer. Time to notify everyone that the component is being
         //operated on no more.
-        setCompStateToFalse(transfer.getComponentId());
+        //Time to remove the component from the source device.
+        deviceData.get(src).leaveDevice(comp);
+        //End of transfer. Time to inform everyone about that.
+        acquireTransferMutex();
+        componentsStates.put(comp, false);
+        //Time to remove the component from the source device.
+        deviceData.get(src).leaveDevice(comp);
+        transferMUTEX.release();
     }
 
     private void moveComponentWithFreeMemoryInTheFuture(ComponentTransfer transfer){
@@ -158,15 +163,17 @@ public class StorageSystemClass implements StorageSystem {
         //the critical section again, so we can perform necessary
         //transition of the component.
         acquireTransferMutex();
-        //Time to remove the component from the source device.
-        deviceData.get(src).leaveDevice(comp);
         //And add it to the dest device.
         deviceData.get(dest).enterDevice(comp);
         //Finally, release mutex and perform the "perform" action.
         transferMUTEX.release();
         transfer.perform();
         //End of transfer. Time to inform everyone about that.
-        setCompStateToFalse(transfer.getComponentId());
+        acquireTransferMutex();
+        componentsStates.put(comp, false);
+        //Time to remove the component from the source device.
+        deviceData.get(src).leaveDevice(comp);
+        transferMUTEX.release();
     }
 
     private boolean bfsOnTransfers (DeviceId id){
