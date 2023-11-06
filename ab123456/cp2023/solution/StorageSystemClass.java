@@ -115,33 +115,24 @@ public class StorageSystemClass implements StorageSystem {
         ComponentId comp = transfer.getComponentId();
         DeviceId src = transfer.getSourceDeviceId();
         DeviceId dest = transfer.getDestinationDeviceId();
-        //Add component to the list of components
-        //leaving the source device.
+
         deviceData.get(src).addComponentLeavingDevice(comp);
-        //Update the number of free memory slots in the dest device.
         deviceData.get(dest).decrementFreeSpace();
-        //Release mutex, so other processes can perform their executes
-        // in a concurrent manner.
         transferMUTEX.release();
+        deviceData.get(src).releaseFreeMemoryInFuture();
+
         transfer.prepare();
-        //We finished the preparation phrase, now we need to enter
-        //the critical section again, so we can perform necessary
-        //transition of the component.
+
+        deviceData.get(src).releaseFreeMemory();
         acquireTransferMutex();
-        //And add it to the dest device.
         deviceData.get(dest).enterDevice(comp);
-        deviceData.get(dest).acquireFreeMemory();
-        //Finally, release mutex and perform the "perform" action.
         transferMUTEX.release();
+
         transfer.perform();
-        //End of transfer. Time to notify everyone that the component is being
-        //operated on no more.
-        //Time to remove the component from the source device.
-        deviceData.get(src).leaveDevice(comp);
-        //End of transfer. Time to inform everyone about that.
+
+        deviceData.get(src).acquireFreeMemoryInFuture();
         acquireTransferMutex();
         componentsStates.put(comp, false);
-        //Time to remove the component from the source device.
         deviceData.get(src).leaveDevice(comp);
         transferMUTEX.release();
     }
@@ -165,6 +156,7 @@ public class StorageSystemClass implements StorageSystem {
         acquireTransferMutex();
         //And add it to the dest device.
         deviceData.get(dest).enterDevice(comp);
+        deviceData.get(dest).decrementFreeSpace();
         //Finally, release mutex and perform the "perform" action.
         transferMUTEX.release();
         transfer.perform();
@@ -263,7 +255,6 @@ public class StorageSystemClass implements StorageSystem {
         acquireTransferMutex();
         //Time to add the comp to the dest device.
         deviceData.get(dest).enterDevice(comp);
-        deviceData.get(dest).acquireFreeMemory();
         //Finally, release mutex and perform the "perform" action.
         transferMUTEX.release();
         transfer.perform();
@@ -332,7 +323,7 @@ public class StorageSystemClass implements StorageSystem {
     public void execute(ComponentTransfer transfer) throws TransferException {
         //1.Entering critical section, acquire mutex.
         acquireTransferMutex();
-        //2. Validate transfer. If something,s wrong, we RELEASE MUTEX FIRST,
+        //2. Validate transfer. If something's wrong, we RELEASE MUTEX FIRST,
         //and then throw an exception.
         validateTransfer(transfer);
         //3. Everything was fine until now, so it's time to determine what

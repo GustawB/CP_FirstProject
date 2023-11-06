@@ -20,6 +20,10 @@ public class DeviceDataWrapper {
     private Semaphore freeMemorySpace;
     private Semaphore freeMemorySpaceInFuture;
 
+    //Functions represent two types of operation: operations on memory that
+    //SHOULD BE protected by mutex, and operations on semaphores, which
+    //SHOULD NOT BE protected by mutex;
+
     public DeviceDataWrapper(ArrayList<ComponentId> components, int slots){
         deviceSize = slots;
         componentsInsideDevice = components;
@@ -45,6 +49,14 @@ public class DeviceDataWrapper {
         } catch (InterruptedException e) {
             throw new RuntimeException("panic: unexpected thread interruption");
         }
+    }
+
+    public void releaseFreeMemory(){
+        freeMemorySpace.release();
+    }
+
+    public void releaseFreeMemoryInFuture(){
+        freeMemorySpaceInFuture.release();
     }
 
     public boolean isComponentInDevice(ComponentId componentId){
@@ -74,21 +86,24 @@ public class DeviceDataWrapper {
     public void addComponentLeavingDevice(ComponentId comp){
         componentsLeavingDevice.add(comp);
         ++nrOfComponentsLeavingDevice;
-        freeMemorySpaceInFuture.release();
+        //freeMemorySpaceInFuture.release();
+    }
+
+    public void freeUpMemorySlot(){
+        freeMemorySpace.release();
+        ++nrOfFreeMemorySlots;
     }
 
     public void leaveDevice(ComponentId comp){
         componentsLeavingDevice.remove(comp);
         componentsInsideDevice.remove(comp);
-        acquireFreeMemoryInFuture();
-        freeMemorySpace.release();
-        ++nrOfFreeMemorySlots;
+        //acquireFreeMemoryInFuture();//TODO: Think about possible problems
         --nrOfComponentsLeavingDevice;
     }
 
     public void enterDevice(ComponentId comp){
         componentsInsideDevice.add(comp);
-        --nrOfFreeMemorySlots;
+        //--nrOfFreeMemorySlots;
     }
 
     public void decrementFreeSpace(){
