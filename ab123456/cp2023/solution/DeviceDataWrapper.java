@@ -19,6 +19,7 @@ public class DeviceDataWrapper {
     private ArrayList<ComponentId> componentsInsideDevice;
     private ArrayList<ComponentId> componentsLeavingDevice;
     private ArrayList<ComponentId> componentsWaitingToEnter;
+    private ArrayList<Semaphore> componentsWaitingToEnterSemaphores;
     private ArrayList<Semaphore> memoryCells;
     private Semaphore awaitFreeMemorySpaceInFuture;
 
@@ -32,6 +33,7 @@ public class DeviceDataWrapper {
         nrOfFreeMemorySlots = deviceSize - components.size();
         componentsLeavingDevice = new ArrayList<>();
         componentsWaitingToEnter = new ArrayList<>();
+        componentsWaitingToEnterSemaphores = new ArrayList<>();
         awaitFreeMemorySpaceInFuture = new Semaphore(0, true);
         memoryCells = new ArrayList<>();
         memoryMapping = new HashMap<>();
@@ -115,5 +117,6 @@ public class DeviceDataWrapper {
 
     public void addComponentWaitingToEnter(ComponentId comp){
         componentsWaitingToEnter.add(comp);
+        componentsWaitingToEnterSemaphores.add(new Semaphore(0, true));
     }
 }

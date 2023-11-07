@@ -15,6 +15,7 @@ public class StorageSystemClass implements StorageSystem {
     //Map used to keep track of the ongoing transfers on each component.
     private Map<ComponentId, Boolean> componentsStates;
     private Semaphore transferMUTEX = new Semaphore(1, true);
+    private Semaphore noMemoryTransferWaiting = new Semaphore(1, true);
 
     public StorageSystemClass(Map<DeviceId, Integer> deviceTotalSlots,
                               Map<ComponentId, DeviceId> componentPlacement) {
@@ -303,6 +304,7 @@ public class StorageSystemClass implements StorageSystem {
                     addComponentWithFreeMemoryInFuture(transfer);
                 }
                 else{
+                    //noMemoryTransferWaiting.acquire();
                     transferMUTEX.release();
                     deviceData.get(transfer.getDestinationDeviceId())
                             .acquireFreeMemoryInFuture();
