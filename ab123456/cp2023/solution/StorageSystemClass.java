@@ -19,6 +19,7 @@ public class StorageSystemClass implements StorageSystem {
     //Map used to keep track of the ongoing transfers on each component.
     private Map<ComponentId, Boolean> componentsStates;
     private ReentrantLock transferMUTEXLock = new ReentrantLock(true);
+    private Map<DeviceId, Condition> conditionsForEveryDevice;
     private Condition noMemoryLockCondition = transferMUTEXLock.newCondition();
     private Semaphore test = new Semaphore(0, true);
 
@@ -48,6 +49,7 @@ public class StorageSystemClass implements StorageSystem {
         }
         //Passed parameters were valid, we can initialize our object.
         deviceData = new HashMap<>();
+        conditionsForEveryDevice = new HashMap<>();
         for(Map.Entry<DeviceId, Integer> entry : deviceTotalSlots.entrySet()){
             if(componentsInDevice.containsKey(entry.getKey())){
                 deviceData.put(entry.getKey(), new DeviceDataWrapper(
@@ -57,13 +59,13 @@ public class StorageSystemClass implements StorageSystem {
                 deviceData.put(entry.getKey(), new DeviceDataWrapper(
                         new ArrayList<>(), entry.getValue()));
             }
+            conditionsForEveryDevice.put(entry.getKey(), transferMUTEXLock.newCondition());
         }
         //initialize mutexex for each component;
         componentsStates = new HashMap<>();
         for(Map.Entry<ComponentId, DeviceId> entry : componentPlacement.entrySet()){
             componentsStates.put(entry.getKey(), false);
         }
-        //Initialize map containing info about
     }
 
     public void awaitOnNoMemoryLockCondition(){
@@ -114,13 +116,33 @@ public class StorageSystemClass implements StorageSystem {
         }
     }
 
+    public void ugabugaSex(ComponentTransfer transfer){
+        ComponentId comp = transfer.getComponentId();
+        DeviceId src = transfer.getSourceDeviceId();
+        DeviceId dest = transfer.getDestinationDeviceId();
+        boolean bWasSignaled  = false;
+        if(transferMUTEXLock.hasWaiters(conditionsForEveryDevice.get(src))){
+            bWasSignaled = true;
+            conditionsForEveryDevice.get(src).signal();
+            try {
+                test.acquire();
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            }
+        }
+        else{
+            deviceData.get(src).increaseNrOfFreeMemorySlots();
+        }
+    }
+
     private void moveComponentWithFreeMemorySpace(ComponentTransfer transfer){
         ComponentId comp = transfer.getComponentId();
         DeviceId src = transfer.getSourceDeviceId();
         DeviceId dest = transfer.getDestinationDeviceId();
 
-        deviceData.get(src).addComponentLeavingDevice(comp);
         deviceData.get(dest).decreaseNrOfFreeMemorySlots();
+        deviceData.get(src).addComponentLeavingDevice(comp);
+        ugabugaSex(transfer);
         transferMUTEXLock.unlock();
         transfer.prepare();
 
@@ -128,8 +150,8 @@ public class StorageSystemClass implements StorageSystem {
         deviceData.get(src).removeComponentFromLeavingDevice(comp);
         deviceData.get(dest).enterDevice(comp);
         deviceData.get(dest).assignFirstFreeMemorySlot(comp);
-        transferMUTEXLock.unlock();
         deviceData.get(src).releaseMemoryCell(comp);
+        transferMUTEXLock.unlock();
         transfer.perform();
 
         transferMUTEXLock.lock();
@@ -146,6 +168,7 @@ public class StorageSystemClass implements StorageSystem {
         deviceData.get(src).addComponentLeavingDevice(comp);
         int memoryIndex = deviceData.get(dest)
                 .getMemoryOfTheFirstLeavingComponent();
+        ugabugaSex(transfer);
         transferMUTEXLock.unlock();
         transfer.prepare();
 
@@ -153,6 +176,7 @@ public class StorageSystemClass implements StorageSystem {
         transferMUTEXLock.lock();
         deviceData.get(src).removeComponentFromLeavingDevice(comp);
         deviceData.get(dest).enterDevice(comp);
+        deviceData.get(src).releaseMemoryCell(comp);
         transferMUTEXLock.unlock();
         deviceData.get(src).releaseMemoryCell(comp);
         transfer.perform();
@@ -171,14 +195,7 @@ public class StorageSystemClass implements StorageSystem {
         deviceData.get(src).addComponentLeavingDevice(comp);
         int memoryIndex = deviceData.get(dest)
                 .getMemoryOfTheFirstLeavingComponent();
-        if(transferMUTEXLock.hasWaiters(noMemoryLockCondition)){
-            noMemoryLockCondition.signal();
-            try {
-                test.acquire();
-            } catch (InterruptedException e) {
-                throw new RuntimeException(e);
-            }
-        }
+        ugabugaSex(transfer);
         transfer.prepare();
 
         deviceData.get(dest).acquireFreeMemoryCell(memoryIndex);
@@ -227,7 +244,11 @@ public class StorageSystemClass implements StorageSystem {
                 moveComponentWithFreeMemoryInTheFuture(transfer);
             }
             else{//No component is leaving the dest device.
-                awaitOnNoMemoryLockCondition();
+                try {
+                    conditionsForEveryDevice.get(transfer.getDestinationDeviceId()).await();
+                } catch (InterruptedException e) {
+                    throw new RuntimeException(e);
+                }
                 //transferMUTEXLock.lock();
                 moveComponentWithFreeMemoryInTheFutureSecond(transfer);
             }
@@ -241,22 +262,14 @@ public class StorageSystemClass implements StorageSystem {
         ComponentId comp = transfer.getComponentId();
         DeviceId src = transfer.getSourceDeviceId();
         deviceData.get(src).addComponentLeavingDevice(comp);
-        if(transferMUTEXLock.hasWaiters(noMemoryLockCondition)){
-            noMemoryLockCondition.signal();
-            try {
-                test.acquire();
-            } catch (InterruptedException e) {
-                throw new RuntimeException(e);
-            }
-        }
-        transferMUTEXLock.unlock();
+        ugabugaSex(transfer);
         transfer.prepare();
 
         transferMUTEXLock.lock();
-        boolean bWasTheMemoryUsed = deviceData.get(src).removeComponentFromLeavingDevice(comp);
-        if(!bWasTheMemoryUsed){
+        deviceData.get(src).removeComponentFromLeavingDevice(comp);
+        //if(!bWasSignaled){
             deviceData.get(src).releaseMemoryCell(comp);
-        }
+        //}
         transferMUTEXLock.unlock();
         transfer.perform();
 
@@ -339,7 +352,11 @@ public class StorageSystemClass implements StorageSystem {
                 addComponentWithFreeMemoryInFuture(transfer);
             }
             else{//No component is leaving the dest device.
-                awaitOnNoMemoryLockCondition();
+                try {
+                    conditionsForEveryDevice.get(transfer.getDestinationDeviceId()).await();
+                } catch (InterruptedException e) {
+                    throw new RuntimeException(e);
+                }
                 //transferMUTEXLock.lock();
                 addComponentWithFreeMemoryInFutureSecond(transfer);
             }
