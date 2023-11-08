@@ -1,12 +1,9 @@
 package cp2023.solution;
 
 import cp2023.base.ComponentId;
-import cp2023.base.ComponentTransfer;
 
-import java.sql.Array;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Semaphore;
 
@@ -14,13 +11,11 @@ import java.util.concurrent.Semaphore;
 //implements useful functions to process this data.
 public class DeviceDataWrapper {
     private int nrOfFreeMemorySlots;
-    private int deviceSize;
+    private final int deviceSize;
     private Map<ComponentId, Integer> memoryMapping;
     private ArrayList<ComponentId> componentsInsideDevice;
     private ArrayList<ComponentId> componentsLeavingDevice;
-    private ArrayList<ComponentId> componentsWaitingToEnter;
     private ArrayList<Semaphore> memoryCells;
-    private Semaphore awaitFreeMemorySpaceInFuture;
 
     //Functions represent two types of operation: operations on memory that
     //SHOULD BE protected by mutex, and operations on semaphores, which
@@ -31,8 +26,6 @@ public class DeviceDataWrapper {
         componentsInsideDevice = components;
         nrOfFreeMemorySlots = deviceSize - components.size();
         componentsLeavingDevice = new ArrayList<>();
-        componentsWaitingToEnter = new ArrayList<>();
-        awaitFreeMemorySpaceInFuture = new Semaphore(0, true);
         memoryCells = new ArrayList<>();
         memoryMapping = new HashMap<>();
         for(int i = 0; i < deviceSize; ++i){
@@ -49,14 +42,6 @@ public class DeviceDataWrapper {
     public void acquireFreeMemoryCell(int i){
         try {
             memoryCells.get(i).acquire();
-        } catch (InterruptedException e) {
-            throw new RuntimeException("panic: unexpected thread interruption");
-        }
-    }
-
-    public void acquireFreeMemoryInFuture(){
-        try {
-            awaitFreeMemorySpaceInFuture.acquire();
         } catch (InterruptedException e) {
             throw new RuntimeException("panic: unexpected thread interruption");
         }
@@ -110,14 +95,10 @@ public class DeviceDataWrapper {
         return componentsLeavingDevice.size();
     }
 
-    public int getMemoryOfTheFirstLeavingComponent(){
+    public int getMemoryOfTheFirstLeavingComponent() {
         int result = memoryMapping
                 .get(componentsLeavingDevice.get(0));
         componentsLeavingDevice.remove(0);
         return result;
-    }
-
-    public void addComponentWaitingToEnter(ComponentId comp){
-        componentsWaitingToEnter.add(comp);
     }
 }

@@ -7,7 +7,6 @@ import cp2023.base.StorageSystem;
 import cp2023.exceptions.*;
 
 import java.util.*;
-import java.util.concurrent.Semaphore;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 
@@ -34,7 +33,7 @@ public class StorageSystemClass implements StorageSystem {
                                 "without specified size.");
             }
             if(!componentPlacement.containsKey(me.getValue())){
-                componentsInDevice.put(me.getValue(), new ArrayList<ComponentId>());
+                componentsInDevice.put(me.getValue(), new ArrayList<>());
             }
             componentsInDevice.get(me.getValue()).add(me.getKey());
             if (componentsInDevice.get(me.getValue()).size() >
@@ -204,7 +203,6 @@ public class StorageSystemClass implements StorageSystem {
     private void deleteComponentOperation(ComponentTransfer transfer){
         ComponentId comp = transfer.getComponentId();
         DeviceId src = transfer.getSourceDeviceId();
-        DeviceId dest = transfer.getDestinationDeviceId();
         deviceData.get(src).addComponentLeavingDevice(comp);
         if(transferMUTEXLock.hasWaiters(noMemoryLockCondition)){
             noMemoryLockCondition.signal();
@@ -226,7 +224,6 @@ public class StorageSystemClass implements StorageSystem {
 
     private void addComponentWithFreeMemory(ComponentTransfer transfer){
         ComponentId comp = transfer.getComponentId();
-        DeviceId src = transfer.getSourceDeviceId();
         DeviceId dest = transfer.getDestinationDeviceId();
 
         deviceData.get(dest).decreaseNrOfFreeMemorySlots();
@@ -246,7 +243,6 @@ public class StorageSystemClass implements StorageSystem {
 
     private void addComponentWithFreeMemoryInFuture(ComponentTransfer transfer){
         ComponentId comp = transfer.getComponentId();
-        DeviceId src = transfer.getSourceDeviceId();
         DeviceId dest = transfer.getDestinationDeviceId();
 
         int memoryIndex = deviceData.get(dest)
