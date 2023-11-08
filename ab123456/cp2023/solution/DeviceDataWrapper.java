@@ -59,8 +59,8 @@ public class DeviceDataWrapper {
         componentsLeavingDevice.add(comp);
     }
 
-    public void removeComponentFromLeavingDevice(ComponentId comp){
-        componentsLeavingDevice.remove(comp);
+    public boolean removeComponentFromLeavingDevice(ComponentId comp){
+        return componentsLeavingDevice.remove(comp);
     }
 
     public void releaseMemoryCell(ComponentId comp){
