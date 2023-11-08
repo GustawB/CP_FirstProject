@@ -19,7 +19,6 @@ public class DeviceDataWrapper {
     private ArrayList<ComponentId> componentsInsideDevice;
     private ArrayList<ComponentId> componentsLeavingDevice;
     private ArrayList<ComponentId> componentsWaitingToEnter;
-    private ArrayList<Semaphore> componentsWaitingToEnterSemaphores;
     private ArrayList<Semaphore> memoryCells;
     private Semaphore awaitFreeMemorySpaceInFuture;
 
@@ -33,7 +32,6 @@ public class DeviceDataWrapper {
         nrOfFreeMemorySlots = deviceSize - components.size();
         componentsLeavingDevice = new ArrayList<>();
         componentsWaitingToEnter = new ArrayList<>();
-        componentsWaitingToEnterSemaphores = new ArrayList<>();
         awaitFreeMemorySpaceInFuture = new Semaphore(0, true);
         memoryCells = new ArrayList<>();
         memoryMapping = new HashMap<>();
@@ -62,6 +60,10 @@ public class DeviceDataWrapper {
         } catch (InterruptedException e) {
             throw new RuntimeException("panic: unexpected thread interruption");
         }
+    }
+
+    boolean isComponentInDevice(ComponentId comp){
+        return componentsInsideDevice.contains(comp);
     }
 
     public int getNrOfFreeMemorySlots(){
@@ -117,6 +119,5 @@ public class DeviceDataWrapper {
 
     public void addComponentWaitingToEnter(ComponentId comp){
         componentsWaitingToEnter.add(comp);
-        componentsWaitingToEnterSemaphores.add(new Semaphore(0, true));
     }
 }
