@@ -102,14 +102,14 @@ public class StorageSystemClass implements StorageSystem {
         }
         else if(transfer.getSourceDeviceId() != null &&
                 !deviceData.get(transfer.getSourceDeviceId())
-                .isComponentInDevice(transfer.getComponentId())){
+                        .isComponentInDevice(transfer.getComponentId())){
             transferMUTEXLock.unlock();
             throw new ComponentDoesNotExist(transfer.getComponentId(),
                     transfer.getSourceDeviceId());
         }
         else if(transfer.getDestinationDeviceId() != null &&
                 deviceData.get(transfer.getDestinationDeviceId())
-                .isComponentInDevice(transfer.getComponentId())){
+                        .isComponentInDevice(transfer.getComponentId())){
             transferMUTEXLock.unlock();
             throw new ComponentDoesNotNeedTransfer(transfer.getComponentId(),
                     transfer.getSourceDeviceId());
@@ -120,18 +120,13 @@ public class StorageSystemClass implements StorageSystem {
         ComponentId comp = transfer.getComponentId();
         DeviceId src = transfer.getSourceDeviceId();
         DeviceId dest = transfer.getDestinationDeviceId();
-        boolean bWasSignaled  = false;
         if(transferMUTEXLock.hasWaiters(conditionsForEveryDevice.get(src))){
-            bWasSignaled = true;
             conditionsForEveryDevice.get(src).signal();
-            try {
+            /*try {
                 test.acquire();
             } catch (InterruptedException e) {
                 throw new RuntimeException(e);
-            }
-        }
-        else{
-            deviceData.get(src).increaseNrOfFreeMemorySlots();
+            }*/
         }
     }
 
@@ -140,23 +135,21 @@ public class StorageSystemClass implements StorageSystem {
         DeviceId src = transfer.getSourceDeviceId();
         DeviceId dest = transfer.getDestinationDeviceId();
 
-        deviceData.get(dest).decreaseNrOfFreeMemorySlots();
         deviceData.get(src).addComponentLeavingDevice(comp);
+        deviceData.get(dest).acquireFirstFreeMemorySlot(comp);
         ugabugaSex(transfer);
         transferMUTEXLock.unlock();
         transfer.prepare();
 
         transferMUTEXLock.lock();
-        deviceData.get(src).removeComponentFromLeavingDevice(comp);
+        deviceData.get(src).leaveDevice(comp);
         deviceData.get(dest).enterDevice(comp);
-        deviceData.get(dest).assignFirstFreeMemorySlot(comp);
         deviceData.get(src).releaseMemoryCell(comp);
         transferMUTEXLock.unlock();
         transfer.perform();
 
         transferMUTEXLock.lock();
         componentsStates.put(comp, false);
-        deviceData.get(src).leaveDevice(comp);
         transferMUTEXLock.unlock();
     }
 
@@ -166,8 +159,7 @@ public class StorageSystemClass implements StorageSystem {
         DeviceId dest = transfer.getDestinationDeviceId();
 
         deviceData.get(src).addComponentLeavingDevice(comp);
-        int memoryIndex = deviceData.get(dest)
-                .getMemoryOfTheFirstLeavingComponent();
+        deviceData.get(dest).reserveMemorySpace(comp);
         ugabugaSex(transfer);
         transferMUTEXLock.unlock();
         transfer.prepare();
@@ -212,39 +204,22 @@ public class StorageSystemClass implements StorageSystem {
         transferMUTEXLock.unlock();
     }
 
-    /*private boolean bfsOnTransfers (DeviceId id){
-        Queue<DeviceId> deviceQueue = new ArrayDeque<>();
-        for(ComponentTransfer t : deviceData.get(id).getTransfersWaitingForMemory()){
-            deviceQueue.add(t.getDestinationDeviceId());
-        }
-        while(!deviceQueue.isEmpty()){
-            DeviceId popped = deviceQueue.poll();
-            for(ComponentTransfer t : deviceData.get(popped).getTransfersWaitingForMemory()){
-                if(t.getDestinationDeviceId().equals(id)){return true;}
-                else{
-                    deviceQueue.add(t.getDestinationDeviceId());
-                }
-            }
-        }
-
-        return false;
-    }*/
-
-    //Function  that performs the operation of moving a component from
-    //the device A to the device B. It inherits the critical section
-    //from the execute() method.
     private void moveComponentOperation(ComponentTransfer transfer){
         if(deviceData.get(transfer.getDestinationDeviceId())
-                .getNrOfFreeMemorySlots() > 0){
+                .hasFreeMemorySpace()){
             moveComponentWithFreeMemorySpace(transfer);
         }
         else {//freeMemorySlots == 0
             if(deviceData.get(transfer.getDestinationDeviceId())
-                    .getNrOfComponentsLeavingDevice() > 0){
+                    .willHaveFreeMemorySpace()){
                 moveComponentWithFreeMemoryInTheFuture(transfer);
             }
             else{//No component is leaving the dest device.
                 try {
+                    while (!deviceData.get(transfer.getDestinationDeviceId())
+                            .hasFreeMemorySpace() &&
+                            !deviceData.get(transfer.getDestinationDeviceId())
+                                    .willHaveFreeMemorySpace())
                     conditionsForEveryDevice.get(transfer.getDestinationDeviceId()).await();
                 } catch (InterruptedException e) {
                     throw new RuntimeException(e);
@@ -268,7 +243,7 @@ public class StorageSystemClass implements StorageSystem {
         transferMUTEXLock.lock();
         deviceData.get(src).removeComponentFromLeavingDevice(comp);
         //if(!bWasSignaled){
-            deviceData.get(src).releaseMemoryCell(comp);
+        deviceData.get(src).releaseMemoryCell(comp);
         //}
         transferMUTEXLock.unlock();
         transfer.perform();
@@ -322,8 +297,7 @@ public class StorageSystemClass implements StorageSystem {
         ComponentId comp = transfer.getComponentId();
         DeviceId dest = transfer.getDestinationDeviceId();
 
-        int memoryIndex = deviceData.get(dest)
-                .getMemoryOfTheFirstLeavingComponent();
+        deviceData.get(dest).reserveMemorySpace(comp);
         test.release();
         transfer.prepare();
 

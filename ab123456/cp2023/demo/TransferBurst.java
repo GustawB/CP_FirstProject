@@ -137,7 +137,9 @@ public final class TransferBurst {
                         duration
                 );
         try {
+            System.out.println("Try to execute transfer from " + srcDevId +" to " + dstDevId);
             system.execute(transfer);
+            System.out.println("Managed to get out of the " + srcDevId +" to " + dstDevId);
         } catch (TransferException e) {
             throw new RuntimeException("Uexpected transfer exception: " + e.toString(), e);
         }

@@ -13,6 +13,7 @@ public class DeviceDataWrapper {
     private int nrOfFreeMemorySlots;
     private final int deviceSize;
     private Map<ComponentId, Integer> memoryMapping;
+    private Map<ComponentId, Integer> reservedMemory;
     private ArrayList<ComponentId> componentsInsideDevice;
     private ArrayList<ComponentId> componentsLeavingDevice;
     private ArrayList<Semaphore> memoryCells;
@@ -28,6 +29,7 @@ public class DeviceDataWrapper {
         componentsLeavingDevice = new ArrayList<>();
         memoryCells = new ArrayList<>();
         memoryMapping = new HashMap<>();
+        reservedMemory = new HashMap<>();
         for(int i = 0; i < deviceSize; ++i){
             if(i < componentsInsideDevice.size()){
                 memoryMapping.put(componentsInsideDevice.get(i), i);
@@ -51,37 +53,30 @@ public class DeviceDataWrapper {
         return componentsInsideDevice.contains(comp);
     }
 
-    public int getNrOfFreeMemorySlots(){
-        return nrOfFreeMemorySlots;
-    }
-
     public void addComponentLeavingDevice(ComponentId comp){
         componentsLeavingDevice.add(comp);
-    }
-
-    public void removeComponentFromLeavingDevice(ComponentId comp){
-        componentsLeavingDevice.remove(comp);
     }
 
     public void releaseMemoryCell(ComponentId comp){
         memoryCells.get(memoryMapping.get(comp)).release();
     }
 
-    public void increaseNrOfFreeMemorySlots(){
-        ++nrOfFreeMemorySlots;
+    public boolean hasFreeMemorySpace(){
+        return deviceSize - memoryMapping.size() > 0;
     }
 
-    public void decreaseNrOfFreeMemorySlots(){
-        --nrOfFreeMemorySlots;
+    public boolean willHaveFreeMemorySpace(){
+        return componentsLeavingDevice.size() > 0;
     }
 
     public void enterDevice(ComponentId comp){
         componentsInsideDevice.add(comp);
     }
 
-    public void assignFirstFreeMemorySlot(ComponentId comp){
+    public void acquireFirstFreeMemorySlot(ComponentId comp){
         for(int i = 0; i < memoryCells.size(); ++i){
-            if(memoryCells.get(i).availablePermits() == 1){
+            if(!memoryMapping.containsValue(i) &&
+                    !reservedMemory.containsValue(i)){
                 acquireFreeMemoryCell(i);
                 memoryMapping.put(comp, i);
                 break;
@@ -91,18 +86,14 @@ public class DeviceDataWrapper {
 
     public void leaveDevice(ComponentId comp){
         componentsInsideDevice.remove(comp);
-        removeComponentFromLeavingDevice(comp);
+        componentsLeavingDevice.remove(comp);
         memoryMapping.remove(comp);
     }
 
-    public int getNrOfComponentsLeavingDevice(){
-        return componentsLeavingDevice.size();
-    }
-
-    public int getMemoryOfTheFirstLeavingComponent() {
+    public void reserveMemorySpace(ComponentId comp){
         int result = memoryMapping
                 .get(componentsLeavingDevice.get(0));
         componentsLeavingDevice.remove(0);
-        return result;
+        reservedMemory.put(comp, result);
     }
 }
