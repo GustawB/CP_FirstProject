@@ -41,7 +41,7 @@ public class DeviceDataWrapper {
         }
     }
 
-    public void acquireFreeMemoryCell(int i){
+    public void acquireMemoryCell(int i){
         try {
             memoryCells.get(i).acquire();
         } catch (InterruptedException e) {
@@ -77,11 +77,17 @@ public class DeviceDataWrapper {
         for(int i = 0; i < memoryCells.size(); ++i){
             if(!memoryMapping.containsValue(i) &&
                     !reservedMemory.containsValue(i)){
-                acquireFreeMemoryCell(i);
+                acquireMemoryCell(i);
                 memoryMapping.put(comp, i);
                 break;
             }
         }
+    }
+
+    public void acquireReservedMemory(ComponentId comp){
+        int index = reservedMemory.get(comp);
+        reservedMemory.remove(comp);
+        acquireMemoryCell(index);
     }
 
     public void leaveDevice(ComponentId comp){
