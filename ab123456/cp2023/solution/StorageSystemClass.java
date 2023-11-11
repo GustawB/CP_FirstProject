@@ -205,6 +205,13 @@ public class StorageSystemClass implements StorageSystem {
 
         deviceData.get(src).addComponentLeavingDevice(comp);
         deviceData.get(dest).reserveMemorySpace(comp);
+        for(int i = 0; i < transfers.size(); ++i){
+            if(transfers.get(i) == transfer){
+                transfers.remove(transfer);
+                transfersSemaphores.remove(transfer);
+                break;
+            }
+        }
         int index = findIndexOfFirstWaiter(transfer);
         if(index >= 0){
             memoryTriggers.add(transfer);
@@ -323,6 +330,13 @@ public class StorageSystemClass implements StorageSystem {
         DeviceId dest = transfer.getDestinationDeviceId();
 
         deviceData.get(dest).reserveMemorySpace(comp);
+        for(int i = 0; i < transfers.size(); ++i){
+            if(transfers.get(i) == transfer){
+                transfers.remove(transfer);
+                transfersSemaphores.remove(transfer);
+                break;
+            }
+        }
         memoryTriggersMapping.get(memoryTriggers.get(0)).release();
         transfer.prepare();
 
