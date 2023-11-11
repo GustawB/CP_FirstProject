@@ -15,8 +15,7 @@ import java.util.concurrent.locks.ReentrantLock;
 public class StorageSystemClass implements StorageSystem {
     Map<DeviceId, DeviceDataWrapper> deviceData;
     private Map<ComponentId, Boolean> componentsStates;
-    private ReentrantLock transferMUTEXLock = new ReentrantLock(true);
-    private Map<DeviceId, Condition> conditionsForEveryDevice;
+    private Semaphore transferMutex = new Semaphore(1, true);
     private ArrayList<ComponentTransfer> transfers = new ArrayList<>();
     private Map<ComponentTransfer, Semaphore> transfersSemaphores = new HashMap<>();
     private ArrayList<ComponentTransfer> memoryTriggers = new ArrayList<>();
@@ -49,7 +48,6 @@ public class StorageSystemClass implements StorageSystem {
         }
         //Passed parameters were valid, we can initialize our object.
         deviceData = new HashMap<>();
-        conditionsForEveryDevice = new HashMap<>();
         for(Map.Entry<DeviceId, Integer> entry : deviceTotalSlots.entrySet()){
             if(componentsInDevice.containsKey(entry.getKey())){
                 deviceData.put(entry.getKey(), new DeviceDataWrapper(
@@ -59,7 +57,6 @@ public class StorageSystemClass implements StorageSystem {
                 deviceData.put(entry.getKey(), new DeviceDataWrapper(
                         new ArrayList<>(), entry.getValue()));
             }
-            conditionsForEveryDevice.put(entry.getKey(), transferMUTEXLock.newCondition());
         }
         //initialize mutexex for each component;
         componentsStates = new HashMap<>();
@@ -74,34 +71,42 @@ public class StorageSystemClass implements StorageSystem {
         if(componentsStates.containsKey(transfer.getComponentId()) &&
                 componentsStates.get(transfer.getComponentId())){
             //There's already an ongoing transfer on the given component.
-            transferMUTEXLock.unlock();
+            transferMutex.release();
             throw new ComponentIsBeingOperatedOn(transfer.getComponentId());
         }
         else if(transfer.getSourceDeviceId() != null &&
                 !deviceData.containsKey(transfer.getSourceDeviceId())){
             //Source device does not exist.
-            transferMUTEXLock.unlock();
+            transferMutex.release();
             throw new DeviceDoesNotExist(transfer.getSourceDeviceId());
         }
         else if(transfer.getDestinationDeviceId() != null &&
                 !deviceData.containsKey(transfer.getDestinationDeviceId())){
             //Destination device does not exist.
-            transferMUTEXLock.unlock();
+            transferMutex.release();
             throw new DeviceDoesNotExist(transfer.getDestinationDeviceId());
         }
         else if(transfer.getSourceDeviceId() != null &&
                 !deviceData.get(transfer.getSourceDeviceId())
                         .isComponentInDevice(transfer.getComponentId())){
-            transferMUTEXLock.unlock();
+            transferMutex.release();
             throw new ComponentDoesNotExist(transfer.getComponentId(),
                     transfer.getSourceDeviceId());
         }
         else if(transfer.getDestinationDeviceId() != null &&
                 deviceData.get(transfer.getDestinationDeviceId())
                         .isComponentInDevice(transfer.getComponentId())){
-            transferMUTEXLock.unlock();
+            transferMutex.release();
             throw new ComponentDoesNotNeedTransfer(transfer.getComponentId(),
                     transfer.getSourceDeviceId());
+        }
+    }
+
+    private void acquireTransferMutex(){
+        try {
+            transferMutex.acquire();
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
         }
     }
 
@@ -146,19 +151,19 @@ public class StorageSystemClass implements StorageSystem {
             memoryTriggersMapping.remove(memoryTriggers.get(0));
             memoryTriggers.remove(0);
         }
-        transferMUTEXLock.unlock();
+        transferMutex.release();
         transfer.prepare();
 
-        transferMUTEXLock.lock();
+        acquireTransferMutex();
         deviceData.get(src).releaseMemoryCell(comp);
         deviceData.get(src).leaveDevice(comp);
         deviceData.get(dest).enterDevice(comp);
-        transferMUTEXLock.unlock();
+        transferMutex.release();
         transfer.perform();
 
-        transferMUTEXLock.lock();
+        acquireTransferMutex();
         componentsStates.put(comp, false);
-        transferMUTEXLock.unlock();
+        transferMutex.release();
     }
 
     private void moveComponentWithFreeMemoryInTheFuture(ComponentTransfer transfer){
@@ -177,20 +182,20 @@ public class StorageSystemClass implements StorageSystem {
             memoryTriggersMapping.remove(memoryTriggers.get(0));
             memoryTriggers.remove(0);
         }
-        transferMUTEXLock.unlock();
+        transferMutex.release();
         transfer.prepare();
 
         deviceData.get(dest).acquireReservedMemory(comp);
-        transferMUTEXLock.lock();
+        acquireTransferMutex();
         deviceData.get(src).releaseMemoryCell(comp);
         deviceData.get(src).leaveDevice(comp);
         deviceData.get(dest).enterDevice(comp);
-        transferMUTEXLock.unlock();
+        transferMutex.release();
         transfer.perform();
 
-        transferMUTEXLock.lock();
+        acquireTransferMutex();
         componentsStates.put(comp, false);
-        transferMUTEXLock.unlock();
+        transferMutex.release();
     }
 
     private void moveComponentWithInheritedCS(ComponentTransfer transfer){
@@ -213,16 +218,16 @@ public class StorageSystemClass implements StorageSystem {
         transfer.prepare();
 
         deviceData.get(dest).acquireReservedMemory(comp);
-        transferMUTEXLock.lock();
+        acquireTransferMutex();
         deviceData.get(src).releaseMemoryCell(comp);
         deviceData.get(src).leaveDevice(comp);
         deviceData.get(dest).enterDevice(comp);
-        transferMUTEXLock.unlock();
+        transferMutex.release();
         transfer.perform();
 
-        transferMUTEXLock.lock();
+        acquireTransferMutex();
         componentsStates.put(comp, false);
-        transferMUTEXLock.unlock();
+        transferMutex.release();
     }
 
     private void moveComponentOperation(ComponentTransfer transfer){
@@ -238,7 +243,7 @@ public class StorageSystemClass implements StorageSystem {
             else{//No component is leaving the dest device.
                 transfers.add(transfer);
                 transfersSemaphores.put(transfer, new Semaphore(0,true));
-                transferMUTEXLock.unlock();
+                transferMutex.release();
                 acquireTransfersSemaphore(transfer);
 
                 moveComponentWithInheritedCS(transfer);
@@ -262,18 +267,18 @@ public class StorageSystemClass implements StorageSystem {
         }
         memoryTriggersMapping.remove(transfer);
         memoryTriggers.remove(transfer);
-        transferMUTEXLock.unlock();
+        transferMutex.release();
         transfer.prepare();
 
-        transferMUTEXLock.lock();
+        acquireTransferMutex();
         deviceData.get(src).releaseMemoryCell(comp);
         deviceData.get(src).leaveDevice(comp);
-        transferMUTEXLock.unlock();
+        transferMutex.release();
         transfer.perform();
 
-        transferMUTEXLock.lock();
+        acquireTransferMutex();
         componentsStates.put(comp, false);
-        transferMUTEXLock.unlock();
+        transferMutex.release();
     }
 
     private void addComponentWithFreeMemory(ComponentTransfer transfer){
@@ -281,17 +286,17 @@ public class StorageSystemClass implements StorageSystem {
         DeviceId dest = transfer.getDestinationDeviceId();
 
         deviceData.get(dest).acquireFirstFreeMemorySlot(comp);
-        transferMUTEXLock.unlock();
+        transferMutex.release();
         transfer.prepare();
 
-        transferMUTEXLock.lock();
+        acquireTransferMutex();
         deviceData.get(dest).enterDevice(comp);
-        transferMUTEXLock.unlock();
+        transferMutex.release();
         transfer.perform();
 
-        transferMUTEXLock.lock();
+        acquireTransferMutex();
         componentsStates.put(comp, false);
-        transferMUTEXLock.unlock();
+        transferMutex.release();
     }
 
     private void addComponentWithFreeMemoryInFuture(ComponentTransfer transfer){
@@ -299,18 +304,18 @@ public class StorageSystemClass implements StorageSystem {
         DeviceId dest = transfer.getDestinationDeviceId();
 
         deviceData.get(dest).reserveMemorySpace(comp);
-        transferMUTEXLock.unlock();
+        transferMutex.release();
         transfer.prepare();
 
         deviceData.get(dest).acquireReservedMemory(comp);
-        transferMUTEXLock.lock();
+        acquireTransferMutex();
         deviceData.get(dest).enterDevice(comp);
-        transferMUTEXLock.unlock();
+        transferMutex.release();
         transfer.perform();
 
-        transferMUTEXLock.lock();
+        acquireTransferMutex();
         componentsStates.put(comp, false);
-        transferMUTEXLock.unlock();
+        transferMutex.release();
     }
 
     private void addComponentWithInheritedCS(ComponentTransfer transfer){
@@ -322,14 +327,14 @@ public class StorageSystemClass implements StorageSystem {
         transfer.prepare();
 
         deviceData.get(dest).acquireReservedMemory(comp);
-        transferMUTEXLock.lock();
+        acquireTransferMutex();
         deviceData.get(dest).enterDevice(comp);
-        transferMUTEXLock.unlock();
+        transferMutex.release();
         transfer.perform();
 
-        transferMUTEXLock.lock();
+        acquireTransferMutex();
         componentsStates.put(comp, false);
-        transferMUTEXLock.unlock();
+        transferMutex.release();
     }
 
     private void addComponentOperation(ComponentTransfer transfer){
@@ -345,7 +350,7 @@ public class StorageSystemClass implements StorageSystem {
             else{//No component is leaving the dest device.
                 transfers.add(transfer);
                 transfersSemaphores.put(transfer, new Semaphore(0,true));
-                transferMUTEXLock.unlock();
+                transferMutex.release();
                 acquireTransfersSemaphore(transfer);
 
                 addComponentWithInheritedCS(transfer);
@@ -355,19 +360,20 @@ public class StorageSystemClass implements StorageSystem {
 
     @Override
     public void execute(ComponentTransfer transfer) throws TransferException {
-        transferMUTEXLock.lock();
+        acquireTransferMutex();
         validateTransfer(transfer);
+        componentsStates.put(transfer.getComponentId(), true);
         if(transfer.getSourceDeviceId() != null && transfer.getDestinationDeviceId() != null){
-            componentsStates.put(transfer.getComponentId(), true);
             moveComponentOperation(transfer);
         }
         else if(transfer.getSourceDeviceId() != null && transfer.getDestinationDeviceId() == null){
-            componentsStates.put(transfer.getComponentId(), true);
             deleteComponentOperation(transfer);
         }
         else if(transfer.getSourceDeviceId() == null && transfer.getDestinationDeviceId() != null){
-            componentsStates.put(transfer.getComponentId(), true);
             addComponentOperation(transfer);
+        }
+        else{
+            componentsStates.put(transfer.getComponentId(), false);
         }
     }
 }
