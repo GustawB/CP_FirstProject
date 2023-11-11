@@ -6,22 +6,22 @@ import cp2023.base.DeviceId;
 import cp2023.base.StorageSystem;
 import cp2023.exceptions.*;
 
+import java.lang.reflect.Array;
 import java.util.*;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 
-//TODO: Add while loops around every await();
-
 public class StorageSystemClass implements StorageSystem {
-    //Map containing data structure with data for every device.
     Map<DeviceId, DeviceDataWrapper> deviceData;
-    //Map used to keep track of the ongoing transfers on each component.
     private Map<ComponentId, Boolean> componentsStates;
     private ReentrantLock transferMUTEXLock = new ReentrantLock(true);
     private Map<DeviceId, Condition> conditionsForEveryDevice;
-    private Condition noMemoryLockCondition = transferMUTEXLock.newCondition();
-    private Semaphore inheritCS = new Semaphore(0, true);
+    private ArrayList<ComponentTransfer> transfers = new ArrayList<>();
+    private Map<ComponentTransfer, Semaphore> transfersSemaphores = new HashMap<>();
+    private ArrayList<ComponentTransfer> memoryTriggers = new ArrayList<>();
+    private HashMap<ComponentTransfer, Semaphore> memoryTriggersMapping = new HashMap<>();
+
 
     public StorageSystemClass(Map<DeviceId, Integer> deviceTotalSlots,
                               Map<ComponentId, DeviceId> componentPlacement) {
@@ -105,16 +105,29 @@ public class StorageSystemClass implements StorageSystem {
         }
     }
 
-    public void ugabugaSex(ComponentTransfer transfer){
-        DeviceId src = transfer.getSourceDeviceId();
-        if(transferMUTEXLock.hasWaiters(conditionsForEveryDevice.get(src))){
-            conditionsForEveryDevice.get(src).signal();
-            try {
-                inheritCS.acquire();
-            } catch (InterruptedException e) {
-                throw new RuntimeException(e);
+    private void acquireTransfersSemaphore(ComponentTransfer t){
+        try {
+            transfersSemaphores.get(t).acquire();
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private void acquireTriggersSemaphore(ComponentTransfer t){
+        try {
+            memoryTriggersMapping.get(t).acquire();
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private int findIndexOfFirstWaiter(ComponentTransfer t){
+        for(int i = 0; i < transfers.size(); ++i){
+            if(transfers.get(i).getDestinationDeviceId().equals(t.getSourceDeviceId())){
+                return i;
             }
         }
+        return -1;
     }
 
     private void moveComponentWithFreeMemorySpace(ComponentTransfer transfer){
@@ -124,14 +137,22 @@ public class StorageSystemClass implements StorageSystem {
 
         deviceData.get(src).addComponentLeavingDevice(comp);
         deviceData.get(dest).acquireFirstFreeMemorySlot(comp);
-        ugabugaSex(transfer);
+        int index = findIndexOfFirstWaiter(transfer);
+        if(index >= 0){
+            memoryTriggers.add(transfer);
+            memoryTriggersMapping.put(transfer, new Semaphore(0, true));
+            transfersSemaphores.get(transfers.get(index)).release();
+            acquireTriggersSemaphore(transfer);
+            memoryTriggersMapping.remove(memoryTriggers.get(0));
+            memoryTriggers.remove(0);
+        }
         transferMUTEXLock.unlock();
         transfer.prepare();
 
         transferMUTEXLock.lock();
+        deviceData.get(src).releaseMemoryCell(comp);
         deviceData.get(src).leaveDevice(comp);
         deviceData.get(dest).enterDevice(comp);
-        deviceData.get(src).releaseMemoryCell(comp);
         transferMUTEXLock.unlock();
         transfer.perform();
 
@@ -147,14 +168,22 @@ public class StorageSystemClass implements StorageSystem {
 
         deviceData.get(src).addComponentLeavingDevice(comp);
         deviceData.get(dest).reserveMemorySpace(comp);
-        ugabugaSex(transfer);
+        int index = findIndexOfFirstWaiter(transfer);
+        if(index >= 0){
+            memoryTriggers.add(transfer);
+            memoryTriggersMapping.put(transfer, new Semaphore(0, true));
+            transfersSemaphores.get(transfers.get(index)).release();
+            acquireTriggersSemaphore(transfer);
+            memoryTriggersMapping.remove(memoryTriggers.get(0));
+            memoryTriggers.remove(0);
+        }
         transferMUTEXLock.unlock();
         transfer.prepare();
 
         deviceData.get(dest).acquireReservedMemory(comp);
         transferMUTEXLock.lock();
-        deviceData.get(src).leaveDevice(comp);
         deviceData.get(src).releaseMemoryCell(comp);
+        deviceData.get(src).leaveDevice(comp);
         deviceData.get(dest).enterDevice(comp);
         transferMUTEXLock.unlock();
         transfer.perform();
@@ -171,15 +200,22 @@ public class StorageSystemClass implements StorageSystem {
 
         deviceData.get(src).addComponentLeavingDevice(comp);
         deviceData.get(dest).reserveMemorySpace(comp);
-        inheritCS.release();
-        transferMUTEXLock.lock();//Synchronize all
-        transferMUTEXLock.unlock();
+        int index = findIndexOfFirstWaiter(transfer);
+        if(index >= 0){
+            memoryTriggers.add(transfer);
+            memoryTriggersMapping.put(transfer, new Semaphore(0, true));
+            transfersSemaphores.get(transfers.get(index)).release();
+            acquireTriggersSemaphore(transfer);
+            memoryTriggersMapping.remove(memoryTriggers.get(0));
+            memoryTriggers.remove(0);
+        }
+        memoryTriggersMapping.get(memoryTriggers.get(0)).release();
         transfer.prepare();
 
         deviceData.get(dest).acquireReservedMemory(comp);
         transferMUTEXLock.lock();
-        deviceData.get(src).leaveDevice(comp);
         deviceData.get(src).releaseMemoryCell(comp);
+        deviceData.get(src).leaveDevice(comp);
         deviceData.get(dest).enterDevice(comp);
         transferMUTEXLock.unlock();
         transfer.perform();
@@ -200,38 +236,38 @@ public class StorageSystemClass implements StorageSystem {
                 moveComponentWithFreeMemoryInTheFuture(transfer);
             }
             else{//No component is leaving the dest device.
-                try {
-                    while (!deviceData.get(transfer.getDestinationDeviceId())
-                            .hasFreeMemorySpace() &&
-                            !deviceData.get(transfer.getDestinationDeviceId())
-                                    .willHaveFreeMemorySpace()) {
-                        System.out.println("move inside while-loop");
-                        conditionsForEveryDevice.get(transfer.getDestinationDeviceId()).await();
-                    }
-                } catch (InterruptedException e) {
-                    transferMUTEXLock.unlock();
-                    throw new RuntimeException(e);
-                }
-                System.out.println("move outside while-loop");
+                transfers.add(transfer);
+                transfersSemaphores.put(transfer, new Semaphore(0,true));
+                transferMUTEXLock.unlock();
+                acquireTransfersSemaphore(transfer);
+
                 moveComponentWithInheritedCS(transfer);
             }
         }
     }
 
-    //Function  that performs the operation of deleting a component
-    // from the source device. It inherits the critical section
-    //from the execute() method.
     private void deleteComponentOperation(ComponentTransfer transfer){
         ComponentId comp = transfer.getComponentId();
         DeviceId src = transfer.getSourceDeviceId();
+
         deviceData.get(src).addComponentLeavingDevice(comp);
-        ugabugaSex(transfer);
+        int index = findIndexOfFirstWaiter(transfer);
+        if(index >= 0){
+            memoryTriggers.add(transfer);
+            memoryTriggersMapping.put(transfer, new Semaphore(0, true));
+            transfersSemaphores.get(transfers.get(index)).release();
+            acquireTriggersSemaphore(transfer);
+            memoryTriggersMapping.remove(memoryTriggers.get(0));
+            memoryTriggers.remove(0);
+        }
+        memoryTriggersMapping.remove(transfer);
+        memoryTriggers.remove(transfer);
         transferMUTEXLock.unlock();
         transfer.prepare();
 
         transferMUTEXLock.lock();
-        deviceData.get(src).leaveDevice(comp);
         deviceData.get(src).releaseMemoryCell(comp);
+        deviceData.get(src).leaveDevice(comp);
         transferMUTEXLock.unlock();
         transfer.perform();
 
@@ -282,9 +318,7 @@ public class StorageSystemClass implements StorageSystem {
         DeviceId dest = transfer.getDestinationDeviceId();
 
         deviceData.get(dest).reserveMemorySpace(comp);
-        inheritCS.release();
-        transferMUTEXLock.lock();//Synchronize all
-        transferMUTEXLock.unlock();
+        memoryTriggersMapping.get(memoryTriggers.get(0)).release();
         transfer.prepare();
 
         deviceData.get(dest).acquireReservedMemory(comp);
@@ -309,20 +343,11 @@ public class StorageSystemClass implements StorageSystem {
                 addComponentWithFreeMemoryInFuture(transfer);
             }
             else{//No component is leaving the dest device.
-                try {
-                    while (!deviceData.get(transfer.getDestinationDeviceId())
-                            .hasFreeMemorySpace() &&
-                            !deviceData.get(transfer.getDestinationDeviceId())
-                                    .willHaveFreeMemorySpace()) {
-                        System.out.println("add inside while-loop");
-                        conditionsForEveryDevice.get(transfer.getDestinationDeviceId()).await();
-                    }
-                } catch (InterruptedException e) {
-                    transferMUTEXLock.unlock();
-                    throw new RuntimeException(e);
-                }
+                transfers.add(transfer);
+                transfersSemaphores.put(transfer, new Semaphore(0,true));
+                transferMUTEXLock.unlock();
+                acquireTransfersSemaphore(transfer);
 
-                System.out.println("add outside while-loop");
                 addComponentWithInheritedCS(transfer);
             }
         }
