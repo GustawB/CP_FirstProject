@@ -176,7 +176,7 @@ public final class TransferBurst {
                 System.out.println("Transferer " + Thread.currentThread().getId() + " has finished.");
             }
         }));
-        transferer.add(new Thread(new Runnablke() {
+        transferer.add(new Thread(new Runnable() {
             @Override
             public void run() {
                 //sleep(50);
