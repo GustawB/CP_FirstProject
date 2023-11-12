@@ -126,13 +126,35 @@ public class StorageSystemClass implements StorageSystem {
         }
     }
 
-    private int findIndexOfFirstWaiter(ComponentTransfer t){
+    private int findIndexOfFirstWaiter(ComponentTransfer transfer){
         for(int i = 0; i < transfers.size(); ++i){
-            if(transfers.get(i).getDestinationDeviceId().equals(t.getSourceDeviceId())){
+            if(transfers.get(i).getDestinationDeviceId()
+                    .equals(transfer.getSourceDeviceId())){
                 return i;
             }
         }
         return -1;
+    }
+
+    private void waitForPreviousWaiter(ComponentTransfer transfer, int index){
+        if(index >= 0){
+            memoryTriggers.add(transfer);
+            memoryTriggersMapping.put(transfer, new Semaphore(0, true));
+            transfersSemaphores.get(transfers.get(index)).release();
+            acquireTriggersSemaphore(transfer);
+            memoryTriggersMapping.remove(transfer);
+            memoryTriggers.remove(transfer);
+        }
+    }
+
+    private void removeWaiter(ComponentTransfer transfer){
+        for(int i = 0; i < transfers.size(); ++i){
+            if(transfers.get(i) == transfer){
+                transfers.remove(transfer);
+                transfersSemaphores.remove(transfer);
+                break;
+            }
+        }
     }
 
     private void moveComponentWithFreeMemorySpace(ComponentTransfer transfer){
@@ -143,14 +165,7 @@ public class StorageSystemClass implements StorageSystem {
         deviceData.get(src).addComponentLeavingDevice(comp);
         deviceData.get(dest).acquireFirstFreeMemorySlot(comp);
         int index = findIndexOfFirstWaiter(transfer);
-        if(index >= 0){
-            memoryTriggers.add(transfer);
-            memoryTriggersMapping.put(transfer, new Semaphore(0, true));
-            transfersSemaphores.get(transfers.get(index)).release();
-            acquireTriggersSemaphore(transfer);
-            memoryTriggersMapping.remove(memoryTriggers.get(0));
-            memoryTriggers.remove(0);
-        }
+        waitForPreviousWaiter(transfer, index);
         transferMutex.release();
         transfer.prepare();
 
@@ -174,14 +189,7 @@ public class StorageSystemClass implements StorageSystem {
         deviceData.get(src).addComponentLeavingDevice(comp);
         deviceData.get(dest).reserveMemorySpace(comp);
         int index = findIndexOfFirstWaiter(transfer);
-        if(index >= 0){
-            memoryTriggers.add(transfer);
-            memoryTriggersMapping.put(transfer, new Semaphore(0, true));
-            transfersSemaphores.get(transfers.get(index)).release();
-            acquireTriggersSemaphore(transfer);
-            memoryTriggersMapping.remove(memoryTriggers.get(0));
-            memoryTriggers.remove(0);
-        }
+        waitForPreviousWaiter(transfer, index);
         transferMutex.release();
         transfer.prepare();
 
@@ -205,22 +213,9 @@ public class StorageSystemClass implements StorageSystem {
 
         deviceData.get(src).addComponentLeavingDevice(comp);
         deviceData.get(dest).reserveMemorySpace(comp);
-        for(int i = 0; i < transfers.size(); ++i){
-            if(transfers.get(i) == transfer){
-                transfers.remove(transfer);
-                transfersSemaphores.remove(transfer);
-                break;
-            }
-        }
+        removeWaiter(transfer);
         int index = findIndexOfFirstWaiter(transfer);
-        if(index >= 0){
-            memoryTriggers.add(transfer);
-            memoryTriggersMapping.put(transfer, new Semaphore(0, true));
-            transfersSemaphores.get(transfers.get(index)).release();
-            acquireTriggersSemaphore(transfer);
-            memoryTriggersMapping.remove(memoryTriggers.get(0));
-            memoryTriggers.remove(0);
-        }
+        waitForPreviousWaiter(transfer, index);
         memoryTriggersMapping.get(memoryTriggers.get(0)).release();
         transfer.prepare();
 
@@ -264,16 +259,7 @@ public class StorageSystemClass implements StorageSystem {
 
         deviceData.get(src).addComponentLeavingDevice(comp);
         int index = findIndexOfFirstWaiter(transfer);
-        if(index >= 0){
-            memoryTriggers.add(transfer);
-            memoryTriggersMapping.put(transfer, new Semaphore(0, true));
-            transfersSemaphores.get(transfers.get(index)).release();
-            acquireTriggersSemaphore(transfer);
-            memoryTriggersMapping.remove(memoryTriggers.get(0));
-            memoryTriggers.remove(0);
-        }
-        memoryTriggersMapping.remove(transfer);
-        memoryTriggers.remove(transfer);
+        waitForPreviousWaiter(transfer, index);
         transferMutex.release();
         transfer.prepare();
 
@@ -330,13 +316,7 @@ public class StorageSystemClass implements StorageSystem {
         DeviceId dest = transfer.getDestinationDeviceId();
 
         deviceData.get(dest).reserveMemorySpace(comp);
-        for(int i = 0; i < transfers.size(); ++i){
-            if(transfers.get(i) == transfer){
-                transfers.remove(transfer);
-                transfersSemaphores.remove(transfer);
-                break;
-            }
-        }
+        removeWaiter(transfer);
         memoryTriggersMapping.get(memoryTriggers.get(0)).release();
         transfer.prepare();
 
