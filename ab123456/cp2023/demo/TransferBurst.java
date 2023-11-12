@@ -31,7 +31,10 @@ public final class TransferBurst {
         DeviceId dev1 = new DeviceId(1);
         DeviceId dev2 = new DeviceId(2);
         DeviceId dev3 = new DeviceId(3);
-        
+        DeviceId dev4 = new DeviceId(4);
+        DeviceId dev5 = new DeviceId(5);
+        DeviceId dev6 = new DeviceId(6);
+
         ComponentId comp1 = new ComponentId(101);
         ComponentId comp2 = new ComponentId(102);
         ComponentId comp3 = new ComponentId(103);
@@ -41,13 +44,25 @@ public final class TransferBurst {
         ComponentId comp7 = new ComponentId(107);
         ComponentId comp8 = new ComponentId(108);
         ComponentId comp9 = new ComponentId(109);
+        ComponentId comp11 = new ComponentId(111);
+        ComponentId comp12 = new ComponentId(112);
+        ComponentId comp13 = new ComponentId(113);
+        ComponentId comp14 = new ComponentId(114);
+        ComponentId comp15 = new ComponentId(115);
+        ComponentId comp16 = new ComponentId(116);
+        ComponentId comp17 = new ComponentId(117);
+        ComponentId comp18 = new ComponentId(118);
+        ComponentId comp19 = new ComponentId(119);
         
-        HashMap<DeviceId, Integer> deviceCapacities = new HashMap<>(3);
+        HashMap<DeviceId, Integer> deviceCapacities = new HashMap<>(6);
         deviceCapacities.put(dev1, 3);
         deviceCapacities.put(dev2, 3);
-        deviceCapacities.put(dev3, 5);
+        deviceCapacities.put(dev3, 3);
+        deviceCapacities.put(dev4, 3);
+        deviceCapacities.put(dev5, 3);
+        deviceCapacities.put(dev6, 3);
         
-        HashMap<ComponentId, DeviceId> initialComponentMapping = new HashMap<>(9);
+        HashMap<ComponentId, DeviceId> initialComponentMapping = new HashMap<>(18);
 
         initialComponentMapping.put(comp1, dev1);
         initialComponentMapping.put(comp2, dev1);
@@ -60,6 +75,18 @@ public final class TransferBurst {
         initialComponentMapping.put(comp7, dev3);
         initialComponentMapping.put(comp8, dev3);
         initialComponentMapping.put(comp9, dev3);
+
+        initialComponentMapping.put(comp11, dev4);
+        initialComponentMapping.put(comp12, dev4);
+        initialComponentMapping.put(comp13, dev4);
+
+        initialComponentMapping.put(comp14, dev5);
+        initialComponentMapping.put(comp15, dev5);
+        initialComponentMapping.put(comp16, dev5);
+
+        initialComponentMapping.put(comp17, dev6);
+        initialComponentMapping.put(comp18, dev6);
+        initialComponentMapping.put(comp19, dev6);
         
         return StorageSystemFactory.newSystem(deviceCapacities, initialComponentMapping);
     }
@@ -72,27 +99,22 @@ public final class TransferBurst {
             public void run() {
                 sleep(10);
                 System.out.println("Transferer " + Thread.currentThread().getId() + " has started.");
-                executeTransfer(system, 101, 1, 3, 20);
-                sleep(30);
-                executeTransfer(system, 105, 2, 0, 10);
+                executeTransfer(system, 101, 1, 2, 20);
+                /*sleep(30);
+                executeTransfer(system, 105, 2, 3, 10);
+                executeTransfer(system, 109, 3, 1, 10);*/
                 System.out.println("Transferer " + Thread.currentThread().getId() + " has finished.");
             }
         }));
         transferer.add(new Thread(new Runnable() {
             @Override
             public void run() {
+                sleep(10);
                 System.out.println("Transferer " + Thread.currentThread().getId() + " has started.");
-                executeTransfer(system, 110, 0, 1, 10);
-                System.out.println("Transferer " + Thread.currentThread().getId() + " has finished.");
-            }
-        }));
-        transferer.add(new Thread(new Runnable() {
-            @Override
-            public void run() {
-                System.out.println("Transferer " + Thread.currentThread().getId() + " has started.");
-                executeTransfer(system, 109, 3, 2, 10);
-                sleep(30);
-                executeTransfer(system, 102, 1, 0, 10);
+                executeTransfer(system, 111, 4, 5, 20);
+                /*sleep(30);
+                executeTransfer(system, 105, 2, 3, 10);
+                executeTransfer(system, 109, 3, 1, 10);*/
                 System.out.println("Transferer " + Thread.currentThread().getId() + " has finished.");
             }
         }));
@@ -104,6 +126,42 @@ public final class TransferBurst {
                 System.out.println("Transferer " + Thread.currentThread().getId() + " has finished.");
             }
         }));
+        transferer.add(new Thread(new Runnable() {
+            @Override
+            public void run() {
+                System.out.println("Transferer " + Thread.currentThread().getId() + " has started.");
+                executeTransfer(system, 117, 6, 4, 10);
+                System.out.println("Transferer " + Thread.currentThread().getId() + " has finished.");
+            }
+        }));
+        transferer.add(new Thread(new Runnable() {
+            @Override
+            public void run() {
+                System.out.println("Transferer " + Thread.currentThread().getId() + " has started.");
+                executeTransfer(system, 104, 2, 3, 10);
+                //sleep(30);
+                //executeTransfer(system, 102, 1, 0, 10);
+                System.out.println("Transferer " + Thread.currentThread().getId() + " has finished.");
+            }
+        }));
+        transferer.add(new Thread(new Runnable() {
+            @Override
+            public void run() {
+                System.out.println("Transferer " + Thread.currentThread().getId() + " has started.");
+                executeTransfer(system, 114, 5, 6, 10);
+                //sleep(30);
+                //executeTransfer(system, 102, 1, 0, 10);
+                System.out.println("Transferer " + Thread.currentThread().getId() + " has finished.");
+            }
+        }));
+        /*transferer.add(new Thread(new Runnable() {
+            @Override
+            public void run() {
+                System.out.println("Transferer " + Thread.currentThread().getId() + " has started.");
+                executeTransfer(system, 107, 3, 1, 10);
+                System.out.println("Transferer " + Thread.currentThread().getId() + " has finished.");
+            }
+        }));*/
         return transferer;
     }
     

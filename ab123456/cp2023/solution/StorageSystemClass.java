@@ -234,8 +234,8 @@ public class StorageSystemClass implements StorageSystem {
         removeWaiter(transfer);
         if(bWasThereACycle && transfers.isEmpty()){
             bWasThereACycle = false;
-            transfers = cycleTransfersListSaver;
-            cycleTransfersListSaver = null;
+            transfers.addAll(cycleTransfersListSaver);
+            cycleTransfersListSaver = new ArrayList<>();
         }
         else{
             int index = findIndexOfFirstWaiter(transfer);
