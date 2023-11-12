@@ -1,6 +1,7 @@
 package cp2023.solution;
 
 import cp2023.base.ComponentId;
+import cp2023.base.ComponentTransfer;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -19,6 +20,7 @@ public class DeviceDataWrapper {
     private ArrayList<ComponentId> componentsInsideDevice;
     private ArrayList<ComponentId> componentsLeavingDevice;
     private ArrayList<Semaphore> memoryCells;
+    public ArrayList<ComponentTransfer> waitingTransfers = new ArrayList<>();
 
     //Functions represent two types of operation: operations on memory that
     //SHOULD BE protected by mutex, and operations on semaphores, which

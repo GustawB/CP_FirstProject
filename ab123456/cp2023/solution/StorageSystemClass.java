@@ -20,6 +20,8 @@ public class StorageSystemClass implements StorageSystem {
     private Map<ComponentTransfer, Semaphore> transfersSemaphores = new HashMap<>();
     private ArrayList<ComponentTransfer> memoryTriggers = new ArrayList<>();
     private HashMap<ComponentTransfer, Semaphore> memoryTriggersMapping = new HashMap<>();
+    private boolean bWasThereACycle = false;
+    private ArrayList<ComponentTransfer> cycleTransfersListSaver;
 
 
     public StorageSystemClass(Map<DeviceId, Integer> deviceTotalSlots,
@@ -157,6 +159,20 @@ public class StorageSystemClass implements StorageSystem {
         }
     }
 
+    private boolean hasCycle(ComponentTransfer transfer, ArrayList<ComponentTransfer> waitingTransfers, ArrayList<ComponentTransfer> result){
+        if(result.size() > 0 && result.get(result.size()-1)
+                .getDestinationDeviceId().equals(transfer.getSourceDeviceId())){return true;}
+        for (ComponentTransfer waitingTransfer : waitingTransfers) {
+            result.add(waitingTransfer);
+            if (hasCycle(transfer, deviceData.get(waitingTransfer.getDestinationDeviceId()).waitingTransfers, result)) {
+                return true;
+            }
+            result.remove(waitingTransfer);
+        }
+
+        return false;
+    }
+
     private void moveComponentWithFreeMemorySpace(ComponentTransfer transfer){
         ComponentId comp = transfer.getComponentId();
         DeviceId src = transfer.getSourceDeviceId();
@@ -206,7 +222,7 @@ public class StorageSystemClass implements StorageSystem {
         transferMutex.release();
     }
 
-    private void moveComponentWithInheritedCS(ComponentTransfer transfer){
+    private void moveComponentWithInheritedCS(ComponentTransfer transfer, boolean bWasClosingCycle){
         ComponentId comp = transfer.getComponentId();
         DeviceId src = transfer.getSourceDeviceId();
         DeviceId dest = transfer.getDestinationDeviceId();
@@ -214,14 +230,31 @@ public class StorageSystemClass implements StorageSystem {
         deviceData.get(src).addComponentLeavingDevice(comp);
         deviceData.get(dest).reserveMemorySpace(comp);
         removeWaiter(transfer);
-        int index = findIndexOfFirstWaiter(transfer);
-        waitForPreviousWaiter(transfer, index);
-        memoryTriggersMapping.get(memoryTriggers.get(0)).release();
+        if(bWasThereACycle && transfers.isEmpty()){
+            bWasThereACycle = false;
+            transfers = cycleTransfersListSaver;
+            cycleTransfersListSaver = null;
+        }
+        else{
+            int index = findIndexOfFirstWaiter(transfer);
+            waitForPreviousWaiter(transfer, index);
+        }
+        if(!bWasClosingCycle) {
+            memoryTriggersMapping.get(memoryTriggers.get(memoryTriggers.size() - 1)).release();
+        }
+        else{
+            transferMutex.release();
+        }
         transfer.prepare();
 
+        if(bWasClosingCycle){
+            deviceData.get(src).releaseMemoryCell(comp);
+        }
         deviceData.get(dest).acquireReservedMemory(comp);
         acquireTransferMutex();
-        deviceData.get(src).releaseMemoryCell(comp);
+        if (!bWasClosingCycle) {
+            deviceData.get(src).releaseMemoryCell(comp);
+        }
         deviceData.get(src).leaveDevice(comp);
         deviceData.get(dest).enterDevice(comp);
         transferMutex.release();
@@ -245,10 +278,23 @@ public class StorageSystemClass implements StorageSystem {
             else{//No component is leaving the dest device.
                 transfers.add(transfer);
                 transfersSemaphores.put(transfer, new Semaphore(0,true));
-                transferMutex.release();
-                acquireTransfersSemaphore(transfer);
+                ArrayList<ComponentTransfer> cycle = new ArrayList<>();
+                if(hasCycle(transfer, deviceData.get(transfer.getDestinationDeviceId()).waitingTransfers, cycle)){
+                    for(ComponentTransfer t : cycle){
+                        transfers.remove(t);
+                    }
+                    bWasThereACycle = true;
+                    cycleTransfersListSaver = transfers;
+                    transfers = cycle;
+                    moveComponentWithInheritedCS(transfer, true);
+                }
+                else{
+                    deviceData.get(transfer.getDestinationDeviceId()).waitingTransfers.add(transfer);
+                    transferMutex.release();
+                    acquireTransfersSemaphore(transfer);
 
-                moveComponentWithInheritedCS(transfer);
+                    moveComponentWithInheritedCS(transfer, false);
+                }
             }
         }
     }
@@ -317,7 +363,7 @@ public class StorageSystemClass implements StorageSystem {
 
         deviceData.get(dest).reserveMemorySpace(comp);
         removeWaiter(transfer);
-        memoryTriggersMapping.get(memoryTriggers.get(0)).release();
+        memoryTriggersMapping.get(memoryTriggers.get(memoryTriggers.size()-1)).release();
         transfer.prepare();
 
         deviceData.get(dest).acquireReservedMemory(comp);
@@ -368,6 +414,8 @@ public class StorageSystemClass implements StorageSystem {
         }
         else{
             componentsStates.put(transfer.getComponentId(), false);
+            transferMutex.release();
+            throw new IllegalArgumentException();
         }
     }
 }
