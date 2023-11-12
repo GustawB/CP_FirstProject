@@ -7,13 +7,10 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.Semaphore;
-import java.util.concurrent.locks.Condition;
-import java.util.concurrent.locks.ReentrantLock;
 
 //This class holds all data if the device with the given id, as well as
 //implements useful functions to process this data.
 public class DeviceDataWrapper {
-    private int nrOfFreeMemorySlots;
     private final int deviceSize;
     private Map<ComponentId, Integer> memoryMapping;
     private Map<ComponentId, Integer> reservedMemory;
@@ -29,7 +26,6 @@ public class DeviceDataWrapper {
     public DeviceDataWrapper(ArrayList<ComponentId> components, int slots){
         deviceSize = slots;
         componentsInsideDevice = components;
-        nrOfFreeMemorySlots = deviceSize - components.size();
         componentsLeavingDevice = new ArrayList<>();
         memoryCells = new ArrayList<>();
         memoryMapping = new HashMap<>();
