@@ -227,6 +227,7 @@ public class StorageSystemClass implements StorageSystem {
         DeviceId dest = transfer.getDestinationDeviceId();
 
         deviceData.get(src).addComponentLeavingDevice(comp);
+        deviceData.get(transfer.getDestinationDeviceId()).waitingTransfers.remove(transfer);
         if(!bWasClosingCycle){
             deviceData.get(dest).reserveMemorySpace(comp);
         }
