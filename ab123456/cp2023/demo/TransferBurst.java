@@ -23,7 +23,7 @@ public final class TransferBurst {
 
     public static void main(String[] args) {
         StorageSystem system = setupSystem();
-        Collection<Thread> users = setupTransferers(system);
+        Collection<Thread> users = setupTransferersCrazy(system);
         runTransferers(users);
     }
 
@@ -154,14 +154,55 @@ public final class TransferBurst {
                 System.out.println("Transferer " + Thread.currentThread().getId() + " has finished.");
             }
         }));
-        /*transferer.add(new Thread(new Runnable() {
+        return transferer;
+    }
+
+    private final static Collection<Thread> setupTransferersCrazy(StorageSystem system) {
+        ArrayList<Thread> transferer = new ArrayList<>();
+        transferer.add(new Thread(new Runnable() {
             @Override
             public void run() {
                 System.out.println("Transferer " + Thread.currentThread().getId() + " has started.");
-                executeTransfer(system, 107, 3, 1, 10);
+                executeTransfer(system, 101, 1, 2, 20);
                 System.out.println("Transferer " + Thread.currentThread().getId() + " has finished.");
             }
-        }));*/
+        }));
+        transferer.add(new Thread(new Runnable() {
+            @Override
+            public void run() {
+                //sleep(50);
+                System.out.println("Transferer " + Thread.currentThread().getId() + " has started.");
+                executeTransfer(system, 111, 4, 2, 20);
+                System.out.println("Transferer " + Thread.currentThread().getId() + " has finished.");
+            }
+        }));
+        transferer.add(new Thread(new Runnablke() {
+            @Override
+            public void run() {
+                //sleep(50);
+                System.out.println("Transferer " + Thread.currentThread().getId() + " has started.");
+                executeTransfer(system, 107, 3, 4, 10);
+                System.out.println("Transferer " + Thread.currentThread().getId() + " has finished.");
+            }
+        }));
+        transferer.add(new Thread(new Runnable() {
+            @Override
+            public void run() {
+                //sleep(50);
+                System.out.println("Transferer " + Thread.currentThread().getId() + " has started.");
+                executeTransfer(system, 108, 3, 1, 10);
+                System.out.println("Transferer " + Thread.currentThread().getId() + " has finished.");
+            }
+        }));
+        transferer.add(new Thread(new Runnable() {
+            @Override
+            public void run() {
+                //sleep(50);
+                System.out.println("Transferer " + Thread.currentThread().getId() + " has started.");
+                executeTransfer(system, 104, 2, 3, 10);
+                System.out.println("Transferer " + Thread.currentThread().getId() + " has finished.");
+            }
+        }));
         return transferer;
     }
     
