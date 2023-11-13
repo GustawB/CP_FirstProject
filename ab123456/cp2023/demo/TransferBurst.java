@@ -20,18 +20,61 @@ import cp2023.solution.StorageSystemFactory;
 
 
 public final class TransferBurst {
-
+    private static int testNr = 1;
+    private static void message(){
+        System.out.println("");
+        System.out.println("Quick note: those tests are based on the tests made by Iwanicki, and so they are fundamentally flawed,");
+        System.out.println("eg. moodleCycles. Tests like it require that processes will be accessing the system in a very");
+        System.out.println("specific manner, and it's difficult to do. It should work with equal durations and sleep times");
+        System.out.println("that I used, by it may not always work as intended. So use at your own risk.");
+        System.out.println("");
+    }
     public static void main(String[] args) {
-        int testNr = 1;
+        message();
+
         StorageSystem system = setupSystem();
-        Collection<Thread> users = independentCycles(system);
-        runTransferers(users);
-        System.out.println("Test nr " + testNr + " passed");
+        runTest(threeElementsCycle(system));//It's here only because I had an error.
+
+        system = setupSystem();
+        runTest(independentCycles(system));
+
+        system = setupSystem();
+        runTest(moodleCycles(system));
+
+        system = setupSystem();
+        runTest(longSequence(system));
+
+        system = setupSystem();
+        runTest(longSequencePermutation(system));
+
+        system = setupSystem();
+        runTest(bulkDeleteAndAdd(system));
+
+        //Variation on the bulkDeleteAndAdd, but here I'm deleting 101 and adding 101,
+        //not deleting 101 and adding 111. Czytelnik koneser zrozumie.
+        system = setupSystem();
+        runTest(bulkDelete(system));
+        sleep(1000);
+        runTest(bulkAdd(system));
+        //This time I won't set up the new system so I can test how cycles work.
+        sleep(1000);
+        runTest(moodleCycles(system));
+
+        System.out.println("");
+        System.out.println("Congrats, your code finished execution (and it maybe even works (\\s))");
+        testNr = 1;
+    }
+
+    private static void printTestNr(){
+        System.out.println("");
+        System.out.println("Test " + testNr + " passed");
+        System.out.println("");
         ++testNr;
-        users = moodleCycles(system);
-        runTransferers(users);
-        System.out.println(testNr + " passed");
-        ++testNr;
+    }
+
+    private static void runTest(Collection<Thread> test){
+        runTransferers(test);
+        printTestNr();
     }
 
     private final static StorageSystem setupSystem() {
@@ -68,7 +111,7 @@ public final class TransferBurst {
         deviceCapacities.put(dev4, 3);
         deviceCapacities.put(dev5, 3);
         deviceCapacities.put(dev6, 3);
-        
+
         HashMap<ComponentId, DeviceId> initialComponentMapping = new HashMap<>(18);
 
         initialComponentMapping.put(comp1, dev1);
@@ -111,6 +154,14 @@ public final class TransferBurst {
             }
         });
     }
+
+    private final static Collection<Thread> threeElementsCycle(StorageSystem system) {
+        ArrayList<Thread> transferer = new ArrayList<>();
+        transferer.add(oneActivityPerThread(system, 101, 1, 2, 10, 0));
+        transferer.add(oneActivityPerThread(system, 107, 3, 1, 10, 0));
+        transferer.add(oneActivityPerThread(system, 104, 2, 3, 10, 0));
+        return transferer;
+    }
     
     private final static Collection<Thread> independentCycles(StorageSystem system) {
         ArrayList<Thread> transferer = new ArrayList<>();
@@ -125,11 +176,67 @@ public final class TransferBurst {
 
     private final static Collection<Thread> moodleCycles(StorageSystem system) {
         ArrayList<Thread> transferer = new ArrayList<>();
-        transferer.add(oneActivityPerThread(system, 101, 1, 2, 10, 50));
-        transferer.add(oneActivityPerThread(system, 111, 4, 2, 10, 50));
-        transferer.add(oneActivityPerThread(system, 107, 3, 4, 10, 50));
-        transferer.add(oneActivityPerThread(system, 108, 3, 1, 10, 50));
-        transferer.add(oneActivityPerThread(system, 104, 2, 3, 10, 50));
+        transferer.add(oneActivityPerThread(system, 101, 1, 2, 10, 0));
+        transferer.add(oneActivityPerThread(system, 111, 4, 2, 10, 10));
+        transferer.add(oneActivityPerThread(system, 107, 3, 4, 10, 20));
+        transferer.add(oneActivityPerThread(system, 108, 3, 1, 10, 30));
+        transferer.add(oneActivityPerThread(system, 104, 2, 3, 10, 40));
+        transferer.add(oneActivityPerThread(system, 106, 2, 0, 10, 50));
+        return transferer;
+    }
+
+    private final static Collection<Thread> longSequence(StorageSystem system) {
+        ArrayList<Thread> transferer = new ArrayList<>();
+        transferer.add(oneActivityPerThread(system, 169, 0, 1, 10, 0));
+        transferer.add(oneActivityPerThread(system, 101, 1, 2, 10, 10));
+        transferer.add(oneActivityPerThread(system, 104, 2, 3, 10, 20));
+        transferer.add(oneActivityPerThread(system, 107, 3, 4, 10, 30));
+        transferer.add(oneActivityPerThread(system, 111, 4, 5, 10, 40));
+        transferer.add(oneActivityPerThread(system, 114, 5, 6, 10, 50));
+        transferer.add(oneActivityPerThread(system, 117, 6, 0, 10, 60));
+        return transferer;
+    }
+
+    private final static Collection<Thread> longSequencePermutation(StorageSystem system) {
+        ArrayList<Thread> transferer = new ArrayList<>();
+        transferer.add(oneActivityPerThread(system, 169, 0, 1, 10, 0));
+        transferer.add(oneActivityPerThread(system, 114, 5, 6, 10, 50));
+        transferer.add(oneActivityPerThread(system, 104, 2, 3, 10, 20));
+        transferer.add(oneActivityPerThread(system, 111, 4, 5, 10, 40));
+        transferer.add(oneActivityPerThread(system, 117, 6, 0, 10, 60));
+        transferer.add(oneActivityPerThread(system, 107, 3, 4, 10, 30));
+        transferer.add(oneActivityPerThread(system, 101, 1, 2, 10, 10));
+        return transferer;
+    }
+
+    private final static Collection<Thread> bulkDeleteAndAdd(StorageSystem system) {
+        ArrayList<Thread> transferer = new ArrayList<>();
+        //Deletion.
+        for(int i = 0; i < 9; ++i){
+            transferer.add(oneActivityPerThread(system, 100 + i + 1, i/3 +1, 0, 10, 0));
+        }
+        //Addition
+        for(int i = 0; i < 9; ++i){
+            transferer.add(oneActivityPerThread(system, 110 + i + 1, 0, i/3 +1, 10, 0));
+        }
+        return transferer;
+    }
+
+    private final static Collection<Thread> bulkDelete(StorageSystem system) {
+        ArrayList<Thread> transferer = new ArrayList<>();
+        //Deletion.
+        for(int i = 0; i < 9; ++i){
+            transferer.add(oneActivityPerThread(system, 100 + i + 1, i/3 +1, 0, 10, 0));
+        }
+        return transferer;
+    }
+
+    private final static Collection<Thread> bulkAdd(StorageSystem system) {
+        ArrayList<Thread> transferer = new ArrayList<>();
+        //Addition
+        for(int i = 0; i < 9; ++i){
+            transferer.add(oneActivityPerThread(system, 100 + i + 1, 0, i/3 +1, 10, 0));
+        }
         return transferer;
     }
     

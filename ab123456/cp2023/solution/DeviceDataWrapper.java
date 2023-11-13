@@ -86,6 +86,7 @@ public class DeviceDataWrapper {
 
     public void acquireReservedMemory(ComponentId comp){
         int index = reservedMemory.get(comp);
+        memoryMapping.put(comp, index);
         reservedMemory.remove(comp);
         acquireMemoryCell(index);
     }
