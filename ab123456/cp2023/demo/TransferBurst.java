@@ -22,9 +22,16 @@ import cp2023.solution.StorageSystemFactory;
 public final class TransferBurst {
 
     public static void main(String[] args) {
+        int testNr = 1;
         StorageSystem system = setupSystem();
-        Collection<Thread> users = setupTransferersCrazy(system);
+        Collection<Thread> users = independentCycles(system);
         runTransferers(users);
+        System.out.println("Test nr " + testNr + " passed");
+        ++testNr;
+        users = moodleCycles(system);
+        runTransferers(users);
+        System.out.println(testNr + " passed");
+        ++testNr;
     }
 
     private final static StorageSystem setupSystem() {
@@ -90,119 +97,39 @@ public final class TransferBurst {
         
         return StorageSystemFactory.newSystem(deviceCapacities, initialComponentMapping);
     }
+
+    private static Thread oneActivityPerThread(StorageSystem system, int compId, int srcDevId, int dstDevId, int duration, int sleep){
+        return new Thread(new Runnable() {
+            @Override
+            public void run() {
+                if(sleep > 0){
+                    sleep(sleep);
+                }
+                System.out.println("Transferer " + Thread.currentThread().getId() + " has started.");
+                executeTransfer(system, compId, srcDevId, dstDevId, duration);
+                System.out.println("Transferer " + Thread.currentThread().getId() + " has finished.");
+            }
+        });
+    }
     
-    private final static Collection<Thread> setupTransferers(StorageSystem system) {
-        // FIXME: debug
+    private final static Collection<Thread> independentCycles(StorageSystem system) {
         ArrayList<Thread> transferer = new ArrayList<>();
-        transferer.add(new Thread(new Runnable() {
-            @Override
-            public void run() {
-                sleep(10);
-                System.out.println("Transferer " + Thread.currentThread().getId() + " has started.");
-                executeTransfer(system, 101, 1, 2, 20);
-                /*sleep(30);
-                executeTransfer(system, 105, 2, 3, 10);
-                executeTransfer(system, 109, 3, 1, 10);*/
-                System.out.println("Transferer " + Thread.currentThread().getId() + " has finished.");
-            }
-        }));
-        transferer.add(new Thread(new Runnable() {
-            @Override
-            public void run() {
-                sleep(10);
-                System.out.println("Transferer " + Thread.currentThread().getId() + " has started.");
-                executeTransfer(system, 111, 4, 5, 20);
-                /*sleep(30);
-                executeTransfer(system, 105, 2, 3, 10);
-                executeTransfer(system, 109, 3, 1, 10);*/
-                System.out.println("Transferer " + Thread.currentThread().getId() + " has finished.");
-            }
-        }));
-        transferer.add(new Thread(new Runnable() {
-            @Override
-            public void run() {
-                System.out.println("Transferer " + Thread.currentThread().getId() + " has started.");
-                executeTransfer(system, 107, 3, 1, 10);
-                System.out.println("Transferer " + Thread.currentThread().getId() + " has finished.");
-            }
-        }));
-        transferer.add(new Thread(new Runnable() {
-            @Override
-            public void run() {
-                System.out.println("Transferer " + Thread.currentThread().getId() + " has started.");
-                executeTransfer(system, 117, 6, 4, 10);
-                System.out.println("Transferer " + Thread.currentThread().getId() + " has finished.");
-            }
-        }));
-        transferer.add(new Thread(new Runnable() {
-            @Override
-            public void run() {
-                System.out.println("Transferer " + Thread.currentThread().getId() + " has started.");
-                executeTransfer(system, 104, 2, 3, 10);
-                //sleep(30);
-                //executeTransfer(system, 102, 1, 0, 10);
-                System.out.println("Transferer " + Thread.currentThread().getId() + " has finished.");
-            }
-        }));
-        transferer.add(new Thread(new Runnable() {
-            @Override
-            public void run() {
-                System.out.println("Transferer " + Thread.currentThread().getId() + " has started.");
-                executeTransfer(system, 114, 5, 6, 10);
-                //sleep(30);
-                //executeTransfer(system, 102, 1, 0, 10);
-                System.out.println("Transferer " + Thread.currentThread().getId() + " has finished.");
-            }
-        }));
+        transferer.add(oneActivityPerThread(system, 101, 1, 2, 10, 0));
+        transferer.add(oneActivityPerThread(system, 111, 4, 5, 10, 0));
+        transferer.add(oneActivityPerThread(system, 107, 3, 1, 10, 0));
+        transferer.add(oneActivityPerThread(system, 117, 6, 4, 10, 0));
+        transferer.add(oneActivityPerThread(system, 104, 2, 3, 10, 0));
+        transferer.add(oneActivityPerThread(system, 114, 5, 6, 10, 0));
         return transferer;
     }
 
-    private final static Collection<Thread> setupTransferersCrazy(StorageSystem system) {
+    private final static Collection<Thread> moodleCycles(StorageSystem system) {
         ArrayList<Thread> transferer = new ArrayList<>();
-        transferer.add(new Thread(new Runnable() {
-            @Override
-            public void run() {
-                System.out.println("Transferer " + Thread.currentThread().getId() + " has started.");
-                executeTransfer(system, 101, 1, 2, 20);
-                System.out.println("Transferer " + Thread.currentThread().getId() + " has finished.");
-            }
-        }));
-        transferer.add(new Thread(new Runnable() {
-            @Override
-            public void run() {
-                //sleep(50);
-                System.out.println("Transferer " + Thread.currentThread().getId() + " has started.");
-                executeTransfer(system, 111, 4, 2, 20);
-                System.out.println("Transferer " + Thread.currentThread().getId() + " has finished.");
-            }
-        }));
-        transferer.add(new Thread(new Runnable() {
-            @Override
-            public void run() {
-                //sleep(50);
-                System.out.println("Transferer " + Thread.currentThread().getId() + " has started.");
-                executeTransfer(system, 107, 3, 4, 10);
-                System.out.println("Transferer " + Thread.currentThread().getId() + " has finished.");
-            }
-        }));
-        transferer.add(new Thread(new Runnable() {
-            @Override
-            public void run() {
-                //sleep(50);
-                System.out.println("Transferer " + Thread.currentThread().getId() + " has started.");
-                executeTransfer(system, 108, 3, 1, 10);
-                System.out.println("Transferer " + Thread.currentThread().getId() + " has finished.");
-            }
-        }));
-        transferer.add(new Thread(new Runnable() {
-            @Override
-            public void run() {
-                //sleep(50);
-                System.out.println("Transferer " + Thread.currentThread().getId() + " has started.");
-                executeTransfer(system, 104, 2, 3, 10);
-                System.out.println("Transferer " + Thread.currentThread().getId() + " has finished.");
-            }
-        }));
+        transferer.add(oneActivityPerThread(system, 101, 1, 2, 10, 50));
+        transferer.add(oneActivityPerThread(system, 111, 4, 2, 10, 50));
+        transferer.add(oneActivityPerThread(system, 107, 3, 4, 10, 50));
+        transferer.add(oneActivityPerThread(system, 108, 3, 1, 10, 50));
+        transferer.add(oneActivityPerThread(system, 104, 2, 3, 10, 50));
         return transferer;
     }
     
