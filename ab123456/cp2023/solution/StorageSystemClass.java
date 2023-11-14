@@ -26,6 +26,9 @@ public class StorageSystemClass implements StorageSystem {
         //Check whether there is a component assigned to the device without
         //defined size, or if there are too many components assigned
         //to one device.
+        if(componentPlacement == null){
+            throw new IllegalArgumentException("Null passed as componentPlacement");
+        }
         Map<DeviceId, ArrayList<ComponentId>> componentsInDevice = new HashMap<>();
         for (Map.Entry<ComponentId, DeviceId> me :
                 componentPlacement.entrySet()) {
@@ -416,7 +419,7 @@ public class StorageSystemClass implements StorageSystem {
         else{
             componentsStates.put(transfer.getComponentId(), false);
             transferMutex.release();
-            throw new IllegalArgumentException();
+            throw new IllegalTransferType(transfer.getComponentId());
         }
     }
 }

@@ -16,6 +16,7 @@ import cp2023.base.ComponentTransfer;
 import cp2023.base.DeviceId;
 import cp2023.base.StorageSystem;
 import cp2023.exceptions.TransferException;
+import cp2023.solution.StorageSystemClass;
 import cp2023.solution.StorageSystemFactory;
 
 
@@ -54,7 +55,7 @@ public final class TransferBurst {
         //not deleting 101 and adding 111. Czytelnik koneser zrozumie.
         system = setupSystem();
         runTest(bulkDelete(system));
-        sleep(1000);
+        //sleep(1000);
         runTest(bulkAdd(system));
         //This time I won't set up the new system so I can test how cycles work.
         sleep(1000);
@@ -103,7 +104,8 @@ public final class TransferBurst {
         ComponentId comp17 = new ComponentId(117);
         ComponentId comp18 = new ComponentId(118);
         ComponentId comp19 = new ComponentId(119);
-        
+        //ComponentId Natus = new ComponentId(120);
+
         HashMap<DeviceId, Integer> deviceCapacities = new HashMap<>(6);
         deviceCapacities.put(dev1, 3);
         deviceCapacities.put(dev2, 3);
@@ -137,7 +139,8 @@ public final class TransferBurst {
         initialComponentMapping.put(comp17, dev6);
         initialComponentMapping.put(comp18, dev6);
         initialComponentMapping.put(comp19, dev6);
-        
+        //initialComponentMapping.put(Natus, dev6);
+
         return StorageSystemFactory.newSystem(deviceCapacities, initialComponentMapping);
     }
 
