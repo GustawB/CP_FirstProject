@@ -70,13 +70,21 @@ public class StorageSystemClass implements StorageSystem {
     //Validates transfer, and if there's anything wrong, this function
     //released transferMUTEXLock and throws a corresponding exception.
     private void validateTransfer(ComponentTransfer transfer) throws TransferException {
-        if(componentsStates.containsKey(transfer.getComponentId()) &&
-                componentsStates.get(transfer.getComponentId())){
-            //There's already an ongoing transfer on the given component.
-            transferMutex.release();
-            throw new ComponentIsBeingOperatedOn(transfer.getComponentId());
+        if(componentsStates.containsKey(transfer.getComponentId())){
+            if(transfer.getSourceDeviceId() == null && transfer.getDestinationDeviceId() != null &&
+                deviceData.get(transfer.getDestinationDeviceId()).isComponentInDevice(transfer.getComponentId())){
+                //We are trying to add something that already exist.
+                transferMutex.release();
+                throw new ComponentAlreadyExists(transfer.getComponentId(), transfer.getDestinationDeviceId());
+            }
+            else if(componentsStates.get(transfer.getComponentId())) {
+                //We are requesting an operation on something that is already being operated on.
+                transferMutex.release();
+                throw new ComponentIsBeingOperatedOn(transfer.getComponentId());
+            }
         }
-        else if(transfer.getSourceDeviceId() != null &&
+
+        if(transfer.getSourceDeviceId() != null &&
                 !deviceData.containsKey(transfer.getSourceDeviceId())){
             //Source device does not exist.
             transferMutex.release();
@@ -184,8 +192,8 @@ public class StorageSystemClass implements StorageSystem {
         transferMutex.release();
         transfer.prepare();
 
-        acquireTransferMutex();
         deviceData.get(src).releaseMemoryCell(comp);
+        acquireTransferMutex();
         deviceData.get(src).leaveDevice(comp);
         deviceData.get(dest).enterDevice(comp);
         transferMutex.release();
@@ -209,8 +217,8 @@ public class StorageSystemClass implements StorageSystem {
         transfer.prepare();
 
         deviceData.get(dest).acquireReservedMemory(comp);
-        acquireTransferMutex();
         deviceData.get(src).releaseMemoryCell(comp);
+        acquireTransferMutex();
         deviceData.get(src).leaveDevice(comp);
         deviceData.get(dest).enterDevice(comp);
         transferMutex.release();
@@ -250,14 +258,9 @@ public class StorageSystemClass implements StorageSystem {
         }
         transfer.prepare();
 
-        if(bWasClosingCycle){
-            deviceData.get(src).releaseMemoryCell(comp);
-        }
+        deviceData.get(src).releaseMemoryCell(comp);
         deviceData.get(dest).acquireReservedMemory(comp);
         acquireTransferMutex();
-        if (!bWasClosingCycle) {
-            deviceData.get(src).releaseMemoryCell(comp);
-        }
         deviceData.get(src).leaveDevice(comp);
         deviceData.get(dest).enterDevice(comp);
         transferMutex.release();
@@ -313,8 +316,8 @@ public class StorageSystemClass implements StorageSystem {
         transferMutex.release();
         transfer.prepare();
 
-        acquireTransferMutex();
         deviceData.get(src).releaseMemoryCell(comp);
+        acquireTransferMutex();
         deviceData.get(src).leaveDevice(comp);
         transferMutex.release();
         transfer.perform();
