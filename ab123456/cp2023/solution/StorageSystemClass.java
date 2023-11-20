@@ -158,13 +158,8 @@ public class StorageSystemClass implements StorageSystem {
     }
 
     private void removeWaiter(ComponentTransfer transfer){
-        for(int i = 0; i < transfers.size(); ++i){
-            if(transfers.get(i) == transfer){
-                transfers.remove(transfer);
-                transfersSemaphores.remove(transfer);
-                break;
-            }
-        }
+        transfers.remove(transfer);
+        transfersSemaphores.remove(transfer);
     }
 
     private boolean hasCycle(ComponentTransfer transfer, ArrayList<ComponentTransfer> waitingTransfers, ArrayList<ComponentTransfer> result){
@@ -217,8 +212,8 @@ public class StorageSystemClass implements StorageSystem {
         transfer.prepare();
 
         deviceData.get(src).releaseMemoryCell(comp);
-        deviceData.get(dest).acquireReservedMemory(comp);
         acquireTransferMutex();
+        deviceData.get(dest).acquireReservedMemory(comp);
         deviceData.get(src).leaveDevice(comp);
         deviceData.get(dest).enterDevice(comp);
         transferMutex.release();
@@ -259,8 +254,8 @@ public class StorageSystemClass implements StorageSystem {
         transfer.prepare();
 
         deviceData.get(src).releaseMemoryCell(comp);
-        deviceData.get(dest).acquireReservedMemory(comp);
         acquireTransferMutex();
+        deviceData.get(dest).acquireReservedMemory(comp);
         deviceData.get(src).leaveDevice(comp);
         deviceData.get(dest).enterDevice(comp);
         transferMutex.release();
@@ -353,8 +348,8 @@ public class StorageSystemClass implements StorageSystem {
         transferMutex.release();
         transfer.prepare();
 
-        deviceData.get(dest).acquireReservedMemory(comp);
         acquireTransferMutex();
+        deviceData.get(dest).acquireReservedMemory(comp);
         deviceData.get(dest).enterDevice(comp);
         transferMutex.release();
         transfer.perform();
@@ -373,8 +368,8 @@ public class StorageSystemClass implements StorageSystem {
         memoryTriggersMapping.get(memoryTriggers.get(memoryTriggers.size()-1)).release();
         transfer.prepare();
 
-        deviceData.get(dest).acquireReservedMemory(comp);
         acquireTransferMutex();
+        deviceData.get(dest).acquireReservedMemory(comp);
         deviceData.get(dest).enterDevice(comp);
         transferMutex.release();
         transfer.perform();

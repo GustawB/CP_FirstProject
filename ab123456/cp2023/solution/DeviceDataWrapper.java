@@ -1,13 +1,10 @@
 package cp2023.solution;
-
 import cp2023.base.ComponentId;
 import cp2023.base.ComponentTransfer;
-
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.Semaphore;
-
 //This class holds all data if the device with the given id, as well as
 //implements useful functions to process this data.
 public class DeviceDataWrapper {
@@ -18,11 +15,9 @@ public class DeviceDataWrapper {
     private ArrayList<ComponentId> componentsLeavingDevice;
     private ArrayList<Semaphore> memoryCells;
     public ArrayList<ComponentTransfer> waitingTransfers = new ArrayList<>();
-
     //Functions represent two types of operation: operations on memory that
     //SHOULD BE protected by mutex, and operations on semaphores, which
     //SHOULD NOT BE protected by mutex;
-
     public DeviceDataWrapper(ArrayList<ComponentId> components, int slots){
         deviceSize = slots;
         componentsInsideDevice = components;
@@ -40,7 +35,6 @@ public class DeviceDataWrapper {
             }
         }
     }
-
     public void acquireMemoryCell(int i){
         try {
             memoryCells.get(i).acquire();
@@ -48,31 +42,24 @@ public class DeviceDataWrapper {
             throw new RuntimeException("panic: unexpected thread interruption");
         }
     }
-
     boolean isComponentInDevice(ComponentId comp){
         return componentsInsideDevice.contains(comp);
     }
-
     public void addComponentLeavingDevice(ComponentId comp){
         componentsLeavingDevice.add(comp);
     }
-
     public void releaseMemoryCell(ComponentId comp){
         memoryCells.get(memoryMapping.get(comp)).release();
     }
-
     public boolean hasFreeMemorySpace(){
         return deviceSize - memoryMapping.size() > 0;
     }
-
     public boolean willHaveFreeMemorySpace(){
         return componentsLeavingDevice.size() > 0;
     }
-
     public void enterDevice(ComponentId comp){
         componentsInsideDevice.add(comp);
     }
-
     public void acquireFirstFreeMemorySlot(ComponentId comp){
         for(int i = 0; i < memoryCells.size(); ++i){
             if(!memoryMapping.containsValue(i) &&
@@ -86,25 +73,19 @@ public class DeviceDataWrapper {
 
     public void acquireReservedMemory(ComponentId comp){
         int index = reservedMemory.get(comp);
-        acquireMemoryCell(index);
         memoryMapping.put(comp, index);
         reservedMemory.remove(comp);
+        acquireMemoryCell(index);
     }
-
     public void leaveDevice(ComponentId comp){
-        memoryMapping.remove(comp);
         componentsInsideDevice.remove(comp);
         componentsLeavingDevice.remove(comp);
-    }
-
-    public void removeMemoryMapping(ComponentId comp){
         memoryMapping.remove(comp);
     }
-
     public void reserveMemorySpace(ComponentId comp){
         int result = memoryMapping
                 .get(componentsLeavingDevice.get(0));
-        reservedMemory.put(comp, result);
         componentsLeavingDevice.remove(0);
+        reservedMemory.put(comp, result);
     }
 }
