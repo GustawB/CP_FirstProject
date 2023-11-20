@@ -92,9 +92,13 @@ public class DeviceDataWrapper {
     }
 
     public void leaveDevice(ComponentId comp){
+        memoryMapping.remove(comp);
         componentsInsideDevice.remove(comp);
         componentsLeavingDevice.remove(comp);
-        //memoryMapping.remove(comp);
+    }
+
+    public void removeMemoryMapping(ComponentId comp){
+        memoryMapping.remove(comp);
     }
 
     public void reserveMemorySpace(ComponentId comp){

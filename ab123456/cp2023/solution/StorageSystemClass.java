@@ -216,8 +216,8 @@ public class StorageSystemClass implements StorageSystem {
         transferMutex.release();
         transfer.prepare();
 
-        deviceData.get(dest).acquireReservedMemory(comp);
         deviceData.get(src).releaseMemoryCell(comp);
+        deviceData.get(dest).acquireReservedMemory(comp);
         acquireTransferMutex();
         deviceData.get(src).leaveDevice(comp);
         deviceData.get(dest).enterDevice(comp);
