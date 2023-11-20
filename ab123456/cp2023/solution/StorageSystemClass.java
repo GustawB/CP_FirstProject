@@ -72,7 +72,7 @@ public class StorageSystemClass implements StorageSystem {
     private void validateTransfer(ComponentTransfer transfer) throws TransferException {
         if(componentsStates.containsKey(transfer.getComponentId())){
             if(transfer.getSourceDeviceId() == null && transfer.getDestinationDeviceId() != null &&
-                deviceData.get(transfer.getDestinationDeviceId()).isComponentInDevice(transfer.getComponentId())){
+                    deviceData.get(transfer.getDestinationDeviceId()).isComponentInDevice(transfer.getComponentId())){
                 //We are trying to add something that already exist.
                 transferMutex.release();
                 throw new ComponentAlreadyExists(transfer.getComponentId(), transfer.getDestinationDeviceId());

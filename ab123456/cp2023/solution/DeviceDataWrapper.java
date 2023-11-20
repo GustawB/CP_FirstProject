@@ -86,21 +86,21 @@ public class DeviceDataWrapper {
 
     public void acquireReservedMemory(ComponentId comp){
         int index = reservedMemory.get(comp);
+        acquireMemoryCell(index);
         memoryMapping.put(comp, index);
         reservedMemory.remove(comp);
-        acquireMemoryCell(index);
     }
 
     public void leaveDevice(ComponentId comp){
         componentsInsideDevice.remove(comp);
         componentsLeavingDevice.remove(comp);
-        memoryMapping.remove(comp);
+        //memoryMapping.remove(comp);
     }
 
     public void reserveMemorySpace(ComponentId comp){
         int result = memoryMapping
                 .get(componentsLeavingDevice.get(0));
-        componentsLeavingDevice.remove(0);
         reservedMemory.put(comp, result);
+        componentsLeavingDevice.remove(0);
     }
 }
