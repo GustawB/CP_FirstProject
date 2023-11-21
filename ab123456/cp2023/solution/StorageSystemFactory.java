@@ -16,6 +16,7 @@ import cp2023.base.StorageSystem;
 
 public final class StorageSystemFactory {
 
+    //Returns a new object of class StirageSystemClass.
     public static StorageSystem newSystem(
             Map<DeviceId, Integer> deviceTotalSlots,
             Map<ComponentId, DeviceId> componentPlacement) {

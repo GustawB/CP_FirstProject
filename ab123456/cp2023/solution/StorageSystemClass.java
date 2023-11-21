@@ -182,11 +182,16 @@ public class StorageSystemClass implements StorageSystem {
 
         deviceData.get(src).addComponentLeavingDevice(comp);
         deviceData.get(dest).acquireFirstFreeMemorySlot(comp);
+        //If there is someone waiting for the memory, we notify him
+        //that he can resume his operations, and we wait for him
+        //to safely update all necessary information.
         int index = findIndexOfFirstWaiter(transfer);
         waitForPreviousWaiter(transfer, index);
+        //We did everything we wanted, release mutex and prepare().
         transferMutex.release();
         transfer.prepare();
 
+        //Free-up memory space.
         deviceData.get(src).releaseMemoryCell(comp);
         acquireTransferMutex();
         deviceData.get(src).leaveDevice(comp);
@@ -205,7 +210,11 @@ public class StorageSystemClass implements StorageSystem {
         DeviceId dest = transfer.getDestinationDeviceId();
 
         deviceData.get(src).addComponentLeavingDevice(comp);
+        //Reserve the memory slot owned by on of the components leaving device.
         deviceData.get(dest).reserveMemorySpace(comp);
+        //If there is someone waiting for the memory, we notify him
+        //that he can resume his operations, and we wait for him
+        //to safely update all necessary information.
         int index = findIndexOfFirstWaiter(transfer);
         waitForPreviousWaiter(transfer, index);
         transferMutex.release();
@@ -213,6 +222,7 @@ public class StorageSystemClass implements StorageSystem {
 
         deviceData.get(src).releaseMemoryCell(comp);
         acquireTransferMutex();
+        //Acquire memory reserved before.
         deviceData.get(dest).acquireReservedMemory(comp);
         deviceData.get(src).leaveDevice(comp);
         deviceData.get(dest).enterDevice(comp);
@@ -230,24 +240,35 @@ public class StorageSystemClass implements StorageSystem {
         DeviceId dest = transfer.getDestinationDeviceId();
 
         deviceData.get(src).addComponentLeavingDevice(comp);
+        //Remove transfer from the list of transfers awaiting to enter
+        //a given device.
         deviceData.get(transfer.getDestinationDeviceId()).waitingTransfers.remove(transfer);
         if(!bWasClosingCycle){
             deviceData.get(dest).reserveMemorySpace(comp);
         }
+        //Remove transfer from the list of transfers waiting for any memory.
         removeWaiter(transfer);
         if(bWasThereACycle && transfers.isEmpty()){
+            //We processed every transfer that was part of the cycle,
+            //restore previous information.
             bWasThereACycle = false;
             transfers.addAll(cycleTransfersListSaver);
             cycleTransfersListSaver = new ArrayList<>();
         }
         else{
+            //If there is someone waiting for the memory, we notify him
+            //that he can resume his operations, and we wait for him
+            //to safely update all necessary information.
             int index = findIndexOfFirstWaiter(transfer);
             waitForPreviousWaiter(transfer, index);
         }
         if(!bWasClosingCycle) {
+            //Resume operations of the transfer that woke us up.
             memoryTriggersMapping.get(memoryTriggers.get(memoryTriggers.size() - 1)).release();
         }
         else{
+            //This transfer is closing a cycle, so it can reserve memory
+            //space only if all other transfers in the cycle performed their actions.
             deviceData.get(dest).reserveMemorySpace(comp);
             transferMutex.release();
         }
@@ -269,19 +290,28 @@ public class StorageSystemClass implements StorageSystem {
     private void moveComponentOperation(ComponentTransfer transfer){
         if(deviceData.get(transfer.getDestinationDeviceId())
                 .hasFreeMemorySpace()){
+            //We have a free memory space, so we proceed.
             moveComponentWithFreeMemorySpace(transfer);
         }
         else {//freeMemorySlots == 0
             if(deviceData.get(transfer.getDestinationDeviceId())
                     .willHaveFreeMemorySpace()){
+                //We know that there is at least one component leaving
+                //the dest device, so we proceed.
                 moveComponentWithFreeMemoryInTheFuture(transfer);
             }
             else{//No component is leaving the dest device.
+                //Add transfer to data structures holding informaton about
+                //waiting transfers.
                 transfers.add(transfer);
                 transfersSemaphores.put(transfer, new Semaphore(0,true));
                 ArrayList<ComponentTransfer> cycle = new ArrayList<>();
                 deviceData.get(transfer.getDestinationDeviceId()).waitingTransfers.add(transfer);
                 if(hasCycle(transfer, deviceData.get(transfer.getSourceDeviceId()).waitingTransfers, cycle)){
+                    //We found the cycle, we need to store the information
+                    //about the waiting transfers that aren't in the cycle,
+                    //and move the cycle into the transfers list so that
+                    //the cycle will be resolved.
                     for(ComponentTransfer t : cycle){
                         transfers.remove(t);
                     }
@@ -292,9 +322,12 @@ public class StorageSystemClass implements StorageSystem {
                     moveComponentWithInheritedCS(transfer, true);
                 }
                 else{
+                    //Release mutex and await for someone to wake us up.
                     transferMutex.release();
                     acquireTransfersSemaphore(transfer);
 
+                    //Resume operation, called in another transfer's
+                    //critical section.
                     moveComponentWithInheritedCS(transfer, false);
                 }
             }
@@ -306,6 +339,9 @@ public class StorageSystemClass implements StorageSystem {
         DeviceId src = transfer.getSourceDeviceId();
 
         deviceData.get(src).addComponentLeavingDevice(comp);
+        //If there is someone waiting for the memory, we notify him
+        //that he can resume his operations, and we wait for him
+        //to safely update all necessary information.
         int index = findIndexOfFirstWaiter(transfer);
         waitForPreviousWaiter(transfer, index);
         transferMutex.release();
@@ -365,6 +401,7 @@ public class StorageSystemClass implements StorageSystem {
 
         deviceData.get(dest).reserveMemorySpace(comp);
         removeWaiter(transfer);
+        //Wake up the transfer that woke us up.
         memoryTriggersMapping.get(memoryTriggers.get(memoryTriggers.size()-1)).release();
         transfer.prepare();
 
@@ -382,19 +419,24 @@ public class StorageSystemClass implements StorageSystem {
     private void addComponentOperation(ComponentTransfer transfer){
         if(deviceData.get(transfer.getDestinationDeviceId())
                 .hasFreeMemorySpace()){
+            //There are free memory slots.
             addComponentWithFreeMemory(transfer);
         }
-        else {//freeMemorySlots == 0
+        else {
             if(deviceData.get(transfer.getDestinationDeviceId())
                     .willHaveFreeMemorySpace()){
+                //There will be free memory slot.
                 addComponentWithFreeMemoryInFuture(transfer);
             }
             else{//No component is leaving the dest device.
                 transfers.add(transfer);
                 transfersSemaphores.put(transfer, new Semaphore(0,true));
                 transferMutex.release();
+                //Release mutex and wait for the free memory.
                 acquireTransfersSemaphore(transfer);
 
+                //Someone woke us up, we continue operations
+                //in his critical section.
                 addComponentWithInheritedCS(transfer);
             }
         }
@@ -402,19 +444,24 @@ public class StorageSystemClass implements StorageSystem {
 
     @Override
     public void execute(ComponentTransfer transfer) throws TransferException {
-        acquireTransferMutex();
-        validateTransfer(transfer);
+        acquireTransferMutex(); //Enter the critical section.
+        validateTransfer(transfer); //Validate the data.
+        //Mark the transferred component as the one that is being operated on.
         componentsStates.put(transfer.getComponentId(), true);
         if(transfer.getSourceDeviceId() != null && transfer.getDestinationDeviceId() != null){
+            //Move operation case (we have source and destination).
             moveComponentOperation(transfer);
         }
         else if(transfer.getSourceDeviceId() != null && transfer.getDestinationDeviceId() == null){
+            //Delete operation case (we have source but no destination).
             deleteComponentOperation(transfer);
         }
         else if(transfer.getSourceDeviceId() == null && transfer.getDestinationDeviceId() != null){
+            //Add operation case (we have destination but no source).
             addComponentOperation(transfer);
         }
         else{
+            //We have no source and destination, so it is an invalid transfer.
             componentsStates.put(transfer.getComponentId(), false);
             transferMutex.release();
             throw new IllegalTransferType(transfer.getComponentId());
