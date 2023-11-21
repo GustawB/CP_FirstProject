@@ -14,7 +14,8 @@ public class DeviceDataWrapper {
     private ArrayList<ComponentId> componentsInsideDevice;
     private ArrayList<ComponentId> componentsLeavingDevice;
     private ArrayList<Semaphore> memoryCells;
-    public ArrayList<ComponentTransfer> waitingTransfers = new ArrayList<>();
+    public ArrayList<ComponentTransfer>
+            waitingTransfers = new ArrayList<>();
 
     //Constructor.
     public DeviceDataWrapper(ArrayList<ComponentId> components, int slots){

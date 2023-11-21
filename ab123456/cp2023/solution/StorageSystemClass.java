@@ -14,11 +14,15 @@ public class StorageSystemClass implements StorageSystem {
     private Map<ComponentId, Boolean> componentsStates;
     private Semaphore transferMutex = new Semaphore(1, true);
     private ArrayList<ComponentTransfer> transfers = new ArrayList<>();
-    private Map<ComponentTransfer, Semaphore> transfersSemaphores = new HashMap<>();
-    private ArrayList<ComponentTransfer> memoryTriggers = new ArrayList<>();
-    private HashMap<ComponentTransfer, Semaphore> memoryTriggersMapping = new HashMap<>();
+    private Map<ComponentTransfer, Semaphore>
+            transfersSemaphores = new HashMap<>();
+    private ArrayList<ComponentTransfer>
+            memoryTriggers = new ArrayList<>();
+    private HashMap<ComponentTransfer, Semaphore>
+            memoryTriggersMapping = new HashMap<>();
     private boolean bWasThereACycle = false;
-    private ArrayList<ComponentTransfer> cycleTransfersListSaver = new ArrayList<>();
+    private ArrayList<ComponentTransfer>
+            cycleTransfersListSaver = new ArrayList<>();
 
 
     public StorageSystemClass(Map<DeviceId, Integer> deviceTotalSlots,
@@ -27,9 +31,11 @@ public class StorageSystemClass implements StorageSystem {
         //defined size, or if there are too many components assigned
         //to one device.
         if(componentPlacement == null){
-            throw new IllegalArgumentException("Null passed as componentPlacement");
+            throw new IllegalArgumentException
+                    ("Null passed as componentPlacement");
         }
-        Map<DeviceId, ArrayList<ComponentId>> componentsInDevice = new HashMap<>();
+        Map<DeviceId, ArrayList<ComponentId>> componentsInDevice
+                = new HashMap<>();
         for (Map.Entry<ComponentId, DeviceId> me :
                 componentPlacement.entrySet()) {
             if (!deviceTotalSlots.containsKey(me.getValue())) {
@@ -53,7 +59,8 @@ public class StorageSystemClass implements StorageSystem {
         for(Map.Entry<DeviceId, Integer> entry : deviceTotalSlots.entrySet()){
             if(componentsInDevice.containsKey(entry.getKey())){
                 deviceData.put(entry.getKey(), new DeviceDataWrapper(
-                        componentsInDevice.get(entry.getKey()), entry.getValue()));
+                        componentsInDevice.get(entry.getKey()),
+                        entry.getValue()));
             }
             else{
                 deviceData.put(entry.getKey(), new DeviceDataWrapper(
@@ -62,23 +69,29 @@ public class StorageSystemClass implements StorageSystem {
         }
         //initialize mutexex for each component;
         componentsStates = new HashMap<>();
-        for(Map.Entry<ComponentId, DeviceId> entry : componentPlacement.entrySet()){
+        for(Map.Entry<ComponentId, DeviceId> entry :
+                componentPlacement.entrySet()){
             componentsStates.put(entry.getKey(), false);
         }
     }
 
     //Validates transfer, and if there's anything wrong, this function
     //released transferMUTEXLock and throws a corresponding exception.
-    private void validateTransfer(ComponentTransfer transfer) throws TransferException {
+    private void validateTransfer(ComponentTransfer transfer)
+            throws TransferException {
         if(componentsStates.containsKey(transfer.getComponentId())){
-            if(transfer.getSourceDeviceId() == null && transfer.getDestinationDeviceId() != null &&
-                    deviceData.get(transfer.getDestinationDeviceId()).isComponentInDevice(transfer.getComponentId())){
+            if(transfer.getSourceDeviceId() == null &&
+                    transfer.getDestinationDeviceId() != null &&
+                    deviceData.get(transfer.getDestinationDeviceId())
+                            .isComponentInDevice(transfer.getComponentId())){
                 //We are trying to add something that already exist.
                 transferMutex.release();
-                throw new ComponentAlreadyExists(transfer.getComponentId(), transfer.getDestinationDeviceId());
+                throw new ComponentAlreadyExists(transfer.getComponentId(),
+                        transfer.getDestinationDeviceId());
             }
             else if(componentsStates.get(transfer.getComponentId())) {
-                //We are requesting an operation on something that is already being operated on.
+                //We are requesting an operation on something that is
+                //already being operated on.
                 transferMutex.release();
                 throw new ComponentIsBeingOperatedOn(transfer.getComponentId());
             }
@@ -250,7 +263,8 @@ public class StorageSystemClass implements StorageSystem {
         transferMutex.release();
     }
 
-    private void moveComponentWithInheritedCS(ComponentTransfer transfer, boolean bWasClosingCycle){
+    private void moveComponentWithInheritedCS(ComponentTransfer transfer,
+                                              boolean bWasClosingCycle){
         ComponentId comp = transfer.getComponentId();
         DeviceId src = transfer.getSourceDeviceId();
         DeviceId dest = transfer.getDestinationDeviceId();
@@ -258,7 +272,8 @@ public class StorageSystemClass implements StorageSystem {
         deviceData.get(src).addComponentLeavingDevice(comp);
         //Remove transfer from the list of transfers awaiting to enter
         //a given device.
-        deviceData.get(transfer.getDestinationDeviceId()).waitingTransfers.remove(transfer);
+        deviceData.get(transfer.getDestinationDeviceId())
+                .waitingTransfers.remove(transfer);
         if(!bWasClosingCycle){
             deviceData.get(dest).reserveMemorySpace(comp);
         }
@@ -280,11 +295,13 @@ public class StorageSystemClass implements StorageSystem {
         }
         if(!bWasClosingCycle) {
             //Resume operations of the transfer that woke us up.
-            memoryTriggersMapping.get(memoryTriggers.get(memoryTriggers.size() - 1)).release();
+            memoryTriggersMapping.get(memoryTriggers
+                    .get(memoryTriggers.size() - 1)).release();
         }
         else{
             //This transfer is closing a cycle, so it can reserve memory
-            //space only if all other transfers in the cycle performed their actions.
+            //space only if all other transfers in the cycle
+            // performed their actions.
             deviceData.get(dest).reserveMemorySpace(comp);
             transferMutex.release();
         }
@@ -320,9 +337,11 @@ public class StorageSystemClass implements StorageSystem {
                 //Add transfer to data structures holding informaton about
                 //waiting transfers.
                 transfers.add(transfer);
-                transfersSemaphores.put(transfer, new Semaphore(0,true));
+                transfersSemaphores.put(transfer,
+                        new Semaphore(0,true));
                 ArrayList<ComponentTransfer> cycle = new ArrayList<>();
-                deviceData.get(transfer.getDestinationDeviceId()).waitingTransfers.add(transfer);
+                deviceData.get(transfer.getDestinationDeviceId())
+                        .waitingTransfers.add(transfer);
                 if(hasCycle(transfer,
                         deviceData.get(transfer.getSourceDeviceId())
                                 .waitingTransfers, cycle, new HashSet<>())){
@@ -420,7 +439,8 @@ public class StorageSystemClass implements StorageSystem {
         deviceData.get(dest).reserveMemorySpace(comp);
         removeWaiter(transfer);
         //Wake up the transfer that woke us up.
-        memoryTriggersMapping.get(memoryTriggers.get(memoryTriggers.size()-1)).release();
+        memoryTriggersMapping.get(memoryTriggers
+                .get(memoryTriggers.size()-1)).release();
         transfer.prepare();
 
         acquireTransferMutex();
@@ -448,7 +468,8 @@ public class StorageSystemClass implements StorageSystem {
             }
             else{//No component is leaving the dest device.
                 transfers.add(transfer);
-                transfersSemaphores.put(transfer, new Semaphore(0,true));
+                transfersSemaphores.put(transfer,
+                        new Semaphore(0,true));
                 transferMutex.release();
                 //Release mutex and wait for the free memory.
                 acquireTransfersSemaphore(transfer);
