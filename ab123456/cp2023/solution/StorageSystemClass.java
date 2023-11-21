@@ -162,14 +162,30 @@ public class StorageSystemClass implements StorageSystem {
         transfersSemaphores.remove(transfer);
     }
 
-    private boolean hasCycle(ComponentTransfer transfer, ArrayList<ComponentTransfer> waitingTransfers, ArrayList<ComponentTransfer> result){
+    private boolean hasCycle(ComponentTransfer transfer,
+                             ArrayList<ComponentTransfer> waitingTransfers,
+                             ArrayList<ComponentTransfer> result,
+                             HashSet<DeviceId> visitedDevices){
+        //We found the cycle.
         if(result.size() > 0 && result.get(result.size()-1) == transfer){return true;}
+        //We visited a device that we know that have no waiting transfer that
+        //will lead to the cycle.
+        else if(visitedDevices.contains(transfer.getSourceDeviceId())){return false;}
+        //Recursive DFS.
         for (ComponentTransfer waitingTransfer : waitingTransfers) {
             result.add(waitingTransfer);
-            if (hasCycle(transfer, deviceData.get(waitingTransfer.getSourceDeviceId()).waitingTransfers, result)) {
+            if (hasCycle(transfer,
+                    deviceData.get(waitingTransfer.getSourceDeviceId())
+                            .waitingTransfers, result, visitedDevices)) {
                 return true;
             }
             result.remove(waitingTransfer);
+        }
+        if(waitingTransfers.size() > 0){
+            //If the destination device has waiting transfers, and we checked
+            //that none of it leads to the cycle, we add it to the
+            //visitedDevices HashSet so that we won't perform DFS on it again.
+            visitedDevices.add(waitingTransfers.get(0).getDestinationDeviceId());
         }
 
         return false;
@@ -307,7 +323,9 @@ public class StorageSystemClass implements StorageSystem {
                 transfersSemaphores.put(transfer, new Semaphore(0,true));
                 ArrayList<ComponentTransfer> cycle = new ArrayList<>();
                 deviceData.get(transfer.getDestinationDeviceId()).waitingTransfers.add(transfer);
-                if(hasCycle(transfer, deviceData.get(transfer.getSourceDeviceId()).waitingTransfers, cycle)){
+                if(hasCycle(transfer,
+                        deviceData.get(transfer.getSourceDeviceId())
+                                .waitingTransfers, cycle, new HashSet<>())){
                     //We found the cycle, we need to store the information
                     //about the waiting transfers that aren't in the cycle,
                     //and move the cycle into the transfers list so that
